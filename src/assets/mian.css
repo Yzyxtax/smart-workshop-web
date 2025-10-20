@@ -1,0 +1,38 @@
+div.page {
+    min-height: 80px; 
+    transform: translateY(10px);
+    animation: fadeInUp 0.6s ease-out forwards;
+    background-color: aquamarine;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+h1 {
+    position: relative;
+    top: 10px;
+    left: 10px;
+    font-size: 2rem;
+    font-weight: bold;
+    color: #333;
+    margin: 0;
+    opacity: 0;
+    /* 如果希望h1也参与淡入，需要给h1单独动画 */
+    animation: fadeIn 0.6s ease-out 0.2s forwards;
+    /* 延迟执行 */
+}
+
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+    }
+}
