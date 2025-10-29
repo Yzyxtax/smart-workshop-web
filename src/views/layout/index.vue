@@ -1,27 +1,27 @@
 <script setup>
 import { ElContainer, ElHeader, ElAside, ElMain } from 'element-plus'
 import HoverButton from '@/components/HoverButton.vue'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 //处理导航栏的折叠和展开
 const isCollapse = ref(true)
+let asideWidth = ref('200px')
 const handleOpen = (key, keyPath) => {
-    console.log(key, keyPath)
+    // console.log(key, keyPath)
 }
 const handleClose = (key, keyPath) => {
-    console.log(key, keyPath)
+    // console.log(key, keyPath)
 }
+//watch侦听isCollapse的变化，动态调整侧边栏宽度
+watch(isCollapse, (newVal) => {
+    asideWidth.value = newVal ? '200px' : '250px'
+})
+
 
 //处理可编辑的标签页
-let tabIndex = 1
-const editableTabsValue = ref('1')
-const editableTabs = ref([
-    {
-        title: '产品管理',
-        name: '/bom'
-    }
-])
+const editableTabsValue = ref()
+const editableTabs = ref([])
 
 const router = useRouter()
 
@@ -88,7 +88,7 @@ const removeTab = (targetName) => {
                 </span>
                 <span class="header-title">
                     <a href="">修改密码</a>
-                    <HoverButton color="gray" text="key" icon="key" icon-color="white" @click="" />
+                    <HoverButton color="#f39c12" text="key" icon="key" icon-color="white" @click="" />
                     <span>&nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp;</span>
                     <a href="">退出登陆</a>
                     <HoverButton color="rgb(255,65,65)" text="out" icon="logout" icon-color="white" @click="" />
@@ -96,32 +96,13 @@ const removeTab = (targetName) => {
             </el-header>
 
             <el-container>
-                <el-aside width="250px">
+                <el-aside :style="{ width: asideWidth }">
                     <el-radio-group v-model="isCollapse" style="margin: 20px; display: flex; justify-content: center;">
                         <el-radio-button :value="false">扩展</el-radio-button>
                         <el-radio-button :value="true">折叠</el-radio-button>
                     </el-radio-group>
                     <el-menu default-active="2" class="el-menu-vertical-demo" :collapse="isCollapse" @open="handleOpen"
                         @close="handleClose" router>
-                        <el-sub-menu index="/meta">
-                            <template #title>
-                                <el-icon>
-                                    <Grid />
-                                </el-icon>
-                                <span>产品设备管理</span>
-                            </template>
-                            <el-menu-item index="/bom" @click="addTab({ index: '/bom', label: '产品管理' })">
-                                <el-icon>
-                                    <Aim />
-                                </el-icon>产品管理
-                            </el-menu-item>
-                            <el-menu-item index="/equipment" @click="addTab({ index: '/equipment', label: '设备管理' })">
-                                <el-icon>
-                                    <Tools />
-                                </el-icon>设备管理
-                            </el-menu-item>
-                        </el-sub-menu>
-
                         <el-sub-menu index="/management">
                             <template #title>
                                 <el-icon>
@@ -135,9 +116,17 @@ const removeTab = (targetName) => {
                             <el-menu-item index="/team" @click="addTab({ index: '/team', label: '班组管理' })"><el-icon>
                                     <User />
                                 </el-icon>班组管理</el-menu-item>
+                            <el-menu-item index="/workstation"
+                                @click="addTab({ index: '/workstation', label: '工位管理' })"><el-icon>
+                                    <Suitcase />
+                                </el-icon>工位管理</el-menu-item>
                             <el-menu-item index="/user" @click="addTab({ index: '/user', label: '员工管理' })"><el-icon>
                                     <Avatar />
                                 </el-icon>员工管理</el-menu-item>
+                            <el-menu-item index="/equipment"
+                                @click="addTab({ index: '/equipment', label: '设备管理' })"><el-icon>
+                                    <Tools />
+                                </el-icon>设备管理</el-menu-item>
                         </el-sub-menu>
 
                         <el-sub-menu index="/production">
@@ -145,8 +134,12 @@ const removeTab = (targetName) => {
                                 <el-icon>
                                     <Filter />
                                 </el-icon>
-                                <span>工艺流程管理</span>
+                                <span>工艺工程管理</span>
                             </template>
+                            <el-menu-item index="/bom" @click="addTab({ index: '/bom', label: '产品管理' })">
+                                <el-icon>
+                                    <Aim />
+                                </el-icon>产品管理</el-menu-item>
                             <el-menu-item index="/flows" @click="addTab({ index: '/flows', label: '工艺流程管理' })"><el-icon>
                                     <HelpFilled />
                                 </el-icon>工艺流程管理</el-menu-item>
@@ -244,6 +237,7 @@ body {
 }
 
 /* 右侧按钮区域样式 */
+
 .header-title {
     display: flex;
     align-items: center;

@@ -10,6 +10,7 @@ import processView from '@/views/process/index.vue'
 import stepView from '@/views/step/index.vue'
 import loginView from '@/views/login/index.vue'
 import layoutView from '@/views/layout/index.vue'
+import workstationView from '@/views/workstation/index.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -17,19 +18,19 @@ const router = createRouter({
     {
       path: '/',
       component: layoutView,
-      redirect: '/bom',
       children: [
-        {path: 'bom' ,component: bomView},
-        {path: 'equipment' ,component: equipmentView},
-        {path: 'line' ,component: lineView},
-        {path: 'team' ,component: teamView},
-        {path: 'user' ,component: userView},
-        {path: 'flows' ,component: flowsView},
-        {path: 'process' ,component: processView},
-        {path: 'step' ,component: stepView},
+        { path: 'bom', name: 'bom', component: bomView },
+        { path: 'equipment', name: 'equipment', component: equipmentView },
+        { path: 'line', name: 'line', component: lineView },
+        { path: 'team', name: 'team', component: teamView },
+        { path: 'user', name: 'user', component: userView },
+        { path: 'flows', name: 'flows', component: flowsView },
+        { path: 'process', name: 'process', component: processView },
+        { path: 'step', name: 'step', component: stepView },
+        { path: 'workstation', name: 'workstation', component: workstationView }
       ]
     },
-    {path: '/login' ,component: loginView},
+    { path: '/login', name: 'login', component: loginView },
   ],
 })
 
