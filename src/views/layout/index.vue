@@ -1,8 +1,9 @@
 <script setup>
-import { ElContainer, ElHeader, ElAside, ElMain } from 'element-plus'
+import { ElContainer, ElHeader, ElAside, ElMain, ElMessageBox, ElMessage } from 'element-plus'
 import HoverButton from '@/components/HoverButton.vue'
-import { ref, watch } from 'vue'
+import { ref, watch, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { updateApi } from '@/api/emp'
 
 //处理导航栏的折叠和展开
 const isCollapse = ref(true)
@@ -76,6 +77,91 @@ const removeTab = (targetName) => {
         }
     }
 }
+
+// 退出登录
+const logout = () => {
+    ElMessageBox.confirm(
+        '确认退出登陆？',
+        '警告',
+        { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    ).then(async () => {
+        ElMessage.success('退出成功')
+        localStorage.removeItem('user')
+        router.push('/login')
+    }).catch(() => {
+        ElMessage.info('已取消')
+    })
+}
+
+//修改密码
+const dialogVisible = ref(false)//控制对话框
+const formLabelWidth = '140px'//表单标签宽度
+//表单数据
+const form = ref({
+    newPassword: '',
+    passwordAgain: ''
+})
+//表单引用
+const passwordForm = ref(null)
+//提交数据
+const updateForm = ref({
+    id: '',
+    password: ''
+})
+//取消按钮
+const cancel = () => {
+    dialogVisible.value = false
+    form.value = {
+        newPassword: '',
+        passwordAgain: ''
+    }
+}
+//表单校验规则
+const rules = ref({
+    newPassword: [
+        { required: true, message: '请输入新密码', trigger: 'blur' },
+        { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+    ],
+    passwordAgain: [
+        { required: true, message: '请再次输入密码', trigger: 'blur' },
+        {
+            validator: (rule, value, callback) => {
+                if (value !== form.value.newPassword) {
+                    callback(new Error('两次输入的密码不一致'))
+                } else {
+                    callback()
+                }
+            }, trigger: 'blur'
+        }
+    ]
+})
+//保存按钮
+const save = () => {
+    //表单校验
+    passwordForm.value.validate(async (valid) => {
+        let result
+        if (valid) {//验证通过
+            const user = JSON.parse(localStorage.getItem('user'));
+            updateForm.value.id = user.id
+            updateForm.value.password = form.value.newPassword
+            result = await updateApi(updateForm.value)
+            if (result.code == 200) {
+                ElMessage.success('密码修改成功，请重新登录')
+                localStorage.removeItem('user')
+                router.push('/login')
+            } else {
+                ElMessage.error('密码修改失败，请稍后重试')
+            }
+            dialogVisible.value = false
+        } else {
+            ElMessage.error('表单数据填写不完整或格式不正确')
+        }
+        form.value = {
+            newPassword: '',
+            passwordAgain: ''
+        }
+    })
+}
 </script>
 
 <template>
@@ -88,10 +174,11 @@ const removeTab = (targetName) => {
                 </span>
                 <span class="header-title">
                     <a href="">修改密码</a>
-                    <HoverButton color="#f39c12" text="key" icon="key" icon-color="white" @click="" />
+                    <HoverButton color="#f39c12" text="key" icon="key" icon-color="white"
+                        @press="dialogVisible = true" />
                     <span>&nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp;</span>
                     <a href="">退出登陆</a>
-                    <HoverButton color="rgb(255,65,65)" text="out" icon="logout" icon-color="white" @click="" />
+                    <HoverButton color="rgb(255,65,65)" text="out" icon="logout" icon-color="white" @press="logout" />
                 </span>
             </el-header>
 
@@ -165,6 +252,25 @@ const removeTab = (targetName) => {
 
         </el-container>
     </div>
+    <el-dialog v-model="dialogVisible" title="修改密码" width="500">
+        <el-form :model="form" :rules="rules" ref="passwordForm">
+            <el-form-item label="新密码" :label-width="formLabelWidth" prop="newPassword">
+                <el-input v-model="form.newPassword" autocomplete="off" />
+            </el-form-item>
+
+            <el-form-item label="确认密码" :label-width="formLabelWidth" prop="passwordAgain">
+                <el-input v-model="form.passwordAgain" autocomplete="off" />
+            </el-form-item>
+        </el-form>
+        <template #footer>
+            <div>
+                <el-button @click="cancel">取消</el-button>
+                <el-button type="primary" @click="save">
+                    提交
+                </el-button>
+            </div>
+        </template>
+    </el-dialog>
 </template>
 
 <style scoped>

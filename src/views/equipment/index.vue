@@ -130,7 +130,7 @@
     </el-dialog>
 </template>
 
-<script setup>9
+<script setup>
 
 import { ref, onMounted } from 'vue'
 import { queryPageApi, addApi, updateApi, queryInfoApi, deleteApi } from '@/api/equipment'
@@ -143,7 +143,7 @@ const searchEquipment = ref({
     model: ''
 })
 
-//员工列表数据
+//设备列表数据
 const equipmentList = ref([])
 
 //清空页表数据
