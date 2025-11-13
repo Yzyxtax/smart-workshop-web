@@ -55,6 +55,7 @@
     <!-- 添加/修改员工的对话框 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle">
         <el-form :rules="rules" ref="equipmentForm" :model="equipment" label-width="80px">
+            {{ equipment }}
             <!-- 基本信息 -->
             <!-- 第一行 -->
             <el-row :gutter="20">
@@ -106,10 +107,10 @@
             </el-row>
 
             <!-- 第五行 ...  设备功能 -->
-            <el-row :gutter="3" v-for="(description, index) in equipment.functionDescription">
+            <el-row :gutter="3" v-for="item in equipment.description">
                 <el-col :span="22">
                     <el-form-item>
-                        <el-input v-model="equipment.functionDescription[index]" type="textarea" />
+                        <el-input v-model="item.functionDescription" type="textarea" />
                     </el-form-item>
                 </el-col>
                 <el-col :span="2">
@@ -193,7 +194,12 @@ const equipment = ref({
     model: '',
     productionDate: '',
     manufacturer: '',
-    functionDescription: []
+    description: [
+        {
+            id: null,
+            functionDescription: ''
+        }
+    ]
 })
 
 //新增设备
@@ -207,7 +213,12 @@ const addEquipment = () => {
         model: '',
         productionDate: '',
         manufacturer: '',
-        functionDescription: []
+        description: [
+            {
+                id: null,
+                functionDescription: ''
+            }
+        ]
     }
     //重置表单校验状态
     if (equipmentForm.value != null) {
@@ -241,12 +252,12 @@ const rules = ref({
 
 //添加设备功能
 const addDescription = () => {
-    equipment.value.functionDescription.push('')
+    equipment.value.description.push({ id: null, functionDescription: '' })
 }
 
 //删除设备功能
 const deleteDescription = (index) => {
-    equipment.value.functionDescription.splice(index, 1)
+    equipment.value.description.splice(index, 1)
 }
 
 //编辑设备

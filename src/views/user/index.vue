@@ -110,7 +110,7 @@ const jobs = ref([
     { value: '生产主管', name: '生产主管' },
     { value: '工艺工程师', name: '工艺工程师' },
     { value: '人事主管', name: '人事主管' },
-    { value: '工人', name: '工人' },
+    { value: '员工', name: '员工' },
     { value: '班组长', name: '班组长' },
     { value: '车间主任', name: '车间主任' }
 ])

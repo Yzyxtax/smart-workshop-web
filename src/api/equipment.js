@@ -15,3 +15,6 @@ export const queryInfoApi = (id) => request.get(`equipment/${id}`)
 
 //批量删除设备信息
 export const deleteApi = (ids) => request.delete(`equipment?ids=${ids}`)
+
+//获取全部设备信息
+export const getAllEquipmentApi = () => request.get('equipment/listAll')

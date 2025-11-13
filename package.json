@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@antv/g6": "^5.0.50",
     "axios": "^1.12.2",
     "element-plus": "^2.11.4",
     "pinia": "^3.0.3",
