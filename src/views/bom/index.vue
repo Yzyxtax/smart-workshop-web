@@ -1,204 +1,180 @@
 <script setup>
-import { saveLevelApi, addBom, deleteBom } from '@/api/bom';
-import BomContent from '@/components/bom/BomContent.vue';
-import BomInsert from '@/components/bom/BomInsert.vue';
-import { ref, onMounted, computed } from 'vue';
-import { ElTree, ElButton, ElMessage } from 'element-plus';
-import { useBomStore } from '@/stores/bom';
-import { storeToRefs } from 'pinia';
-
+import { addBom, deleteBom, saveLevelApi } from "@/api/bom";
+import BomContent from "@/components/bom/BomContent.vue";
+import BomInsert from "@/components/bom/BomInsert.vue";
+import { ref, onMounted, nextTick } from "vue";
+import { ElMessage } from "element-plus";
+import { useBomStore } from "@/stores/bom";
+import { storeToRefs } from "pinia";
 
 const bomStore = useBomStore();
-const { bomTreeData } = storeToRefs(bomStore);
-const { loadBomData } = bomStore;
+const { bomTreeData, expandedKeys } = storeToRefs(bomStore);
+const { loadBomData, addNode, removeNode, moveNode } = bomStore;
 
-const idSeed = computed(() => {
-    // 计算当前最大ID值，用于添加新节点时生成唯一ID
-    let maxId = 0;
+const clickId = ref(null);
+const treeRef = ref(null);
 
-    const traverse = (nodes) => {
-        for (const node of nodes) {
-            if (node.id > maxId) {
-                maxId = node.id;
-            }
-            if (node.children && node.children.length > 0) {
-                traverse(node.children);
-            }
-        }
-    };
-
-    traverse(bomTreeData.value);
-    return maxId + 1; // 返回下一个可用ID
+onMounted(async () => {
+    await loadBomData();
+    if (bomTreeData.value.length > 0) {
+        clickId.value = bomTreeData.value[0].id;
+    }
 });
 
-// 配置 el-tree 如何解析数据
-const treeProps = {
-    label: 'label', // 对应节点显示文本的字段名
-    children: 'children' // 对应子节点数组的字段名
+// 保存展开状态
+const handleNodeExpand = (data, node) => {
+    expandedKeys.value.add(data.id);
 };
 
-const clickId = ref(1);//将点击的节点ID传递给子组件，默认显示第一个节点
-// 节点点击事件处理
-const handleNodeClick = (data, node, component) => {
+const handleNodeCollapse = (data, node) => {
+    expandedKeys.value.delete(data.id);
+};
+
+// 点击树节点
+const handleNodeClick = (data) => {
     clickId.value = data.id;
 };
 
-// 在组件挂载时加载BOM数据
-onMounted(() => {
-    loadBomData();
-});
+// 新增节点弹窗控制
+const isShowPage = ref(false);
+const currentParentId = ref(null);
 
-// 添加节点
-const currentParentId = ref();
-let isShowPage = ref(false);
 const append = (data) => {
-    //显示页面
-    isShowPage.value = true;
-    //保存当前项数据
     currentParentId.value = data.id;
-}
-//处理取消按钮逻辑
+    isShowPage.value = true;
+};
+
 const handleCancel = () => {
     isShowPage.value = false;
-}
-//处理提交逻辑
+};
+
+// 新增提交
 const handleSubmit = async (childData) => {
-    //发送请求
     const result = await addBom(childData);
     if (result.code === 200) {
-        ElMessage.success('添加成功');
+        ElMessage.success("添加成功");
+        childData.id = result.data;
+        addNode(currentParentId.value, childData); // 局部更新
         isShowPage.value = false;
-        loadBomData();
     } else {
         ElMessage.error(result.message);
     }
-}
-// 删除节点
-// 递归收集节点及其所有子节点的ID
-const collectIds = (nodeData) => {
-    const ids = [nodeData.id]; // 先把自己ID加进去
-    if (nodeData.children && Array.isArray(nodeData.children)) {
-        for (const child of nodeData.children) {
-            ids.push(...collectIds(child)); // 递归收集子节点ID
-        }
+};
+
+// 递归收集所有子节点 id
+const collectIds = (node) => {
+    const ids = [node.id];
+    if (node.children) {
+        node.children.forEach(c => ids.push(...collectIds(c)));
     }
     return ids;
 };
-//执行删除逻辑
+
+// 删除节点
 const remove = async (data) => {
-    //收集要删除的id
-    const idsToDelete = collectIds(data.data);
-    //执行删除
-    const result = await deleteBom(idsToDelete);
+    const ids = collectIds(data);
+    const result = await deleteBom(ids);
+
     if (result.code === 200) {
-        ElMessage.success('删除成功');
-        loadBomData();
+        ElMessage.success("删除成功");
+        removeNode(data.id); // 局部更新
     } else {
         ElMessage.error(result.message);
     }
-}
+};
 
-//拖拽放置的规则
-const allowDrop = (draggingNode, dropNode, Type) => {
-    //1.不允许拖拽到自身（自引用）
-    const isChild = (parent, childId) => {
-        if (parent.data.id === childId) return true;
-        if (parent.children) {
-            for (let childNode of parent.children) {
-                if (isChild(childNode, childId)) return true;
-            }
+// 拖拽规则
+const allowDrop = (dragNode, dropNode, type) => {
+    const isChild = (parent, targetId) => {
+        if (parent.data.id === targetId) return true;
+        if (parent.childNodes) {
+            return parent.childNodes.some(child => isChild(child, targetId));
         }
         return false;
     };
-    //2.不允许拖拽到子节点上(循环引用)
-    if (isChild(draggingNode, dropNode.data.id)) {
+
+    if (isChild(dragNode, dropNode.data.id)) return false;
+
+    if (dragNode.level === 1 && type === "inner" && dropNode.level > 1) {
         return false;
     }
-    //3.根节点不允许拖拽到子节点上（业务层面）
-    if (draggingNode.level === 1 && Type === 'inner' && dropNode.level > 1) {
-        return false;
-    }
+
     return true;
-}
+};
 
-//拖拽结束事件
-const handleDragEnd = async (draggingNode, dropNode, dropType, event) => {
-    //如果没有发生实际移动，不处理
-    if (!dropType) {
-        return;
-    };
+// 拖拽结束
+const handleDragEnd = async (dragNode, dropNode, type) => {
+    if (!type) return;
 
-    //找到被拖拽的节点在bomTreeData中的位置并更新其parentId
-    const updateParentId = (nodes, targetId, newPrentId) => {
-        for (const node of nodes) {
-            if (node.id === targetId) {
-                node.parentId = newPrentId;//更新
-                return true;//返回
-            }
-            //递归查找子节点
-            if (node.children && node.children.length > 0) {
-                if (updateParentId(node.children, targetId, newPrentId)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    };
-
-    let newParentId = null;//默认是根节点
-    if (dropType === 'inner') {
-        //拖拽到目标节点内部，目标节点的id就是新的parentId
+    let newParentId = null;
+    if (type === "inner") {
         newParentId = dropNode.data.id;
     } else {
-        //拖拽到目标节点同级，目标节点的parentId就是新的parentId，注意如果目标节点是根节点，那么新的parentId也会是null
         newParentId = dropNode.parent ? dropNode.parent.data.id : null;
     }
 
-    updateParentId(bomTreeData.value, draggingNode.data.id, newParentId);
-
-    const result = await saveLevelApi(draggingNode.data.id, newParentId);
+    const result = await saveLevelApi(dragNode.data.id, newParentId);
     if (result.code === 200) {
-        ElMessage.success("层级修改成功");
+        ElMessage.success("层级已更新");
+        moveNode(dragNode.data.id, newParentId); // 局部更新
     } else {
-        ElMessage.error("层级修改失败");
-        loadBomData();
+        ElMessage.error("层级更新失败");
     }
-}
+};
+
+const updateNodeName = async (updatedNode) => {
+    updateNodeInTree(bomStore.bomTreeData, updatedNode);
+    await nextTick();
+};
+
+const updateNodeInTree = (tree, updated) => {
+    for (const node of tree) {
+        if (node.id === updated.id) {
+            node.nameSpecification = updated.nameSpecification;
+            node.label = updated.nameSpecification; // 如果 label 依赖 nameSpecification
+            return true;
+        }
+        if (node.children) {
+            const found = updateNodeInTree(node.children, updated);
+            if (found) return true;
+        }
+    }
+    return false;
+};
 </script>
 
 <template>
     <div class="page">
         <h1>产品管理</h1>
     </div>
+
     <div class="tree">
         <div class="ElTree">
-            <el-tree :data="bomTreeData" :props="treeProps" node-key="id" default-expand-all :highlight-current="true"
-                :expand-on-click-node="false" @node-click="handleNodeClick" draggable :allow-drop="allowDrop"
-                @node-drag-end="handleDragEnd" :indent="20" class="my-custom-tree">
+            <el-tree ref="treeRef" :data="bomTreeData" node-key="id" :highlight-current="true"
+                :expand-on-click-node="false" @node-click="handleNodeClick" @node-expand="handleNodeExpand"
+                @node-collapse="handleNodeCollapse" draggable :allow-drop="allowDrop" @node-drag-end="handleDragEnd"
+                class="my-custom-tree">
                 <template #default="{ node, data }">
                     <div class="custom-tree-node">
                         <span>{{ data.label }}</span>
                         <div>
-                            <el-button type="primary" link @click="append(data)">
-                                添加
-                            </el-button>
-                            <el-button style="margin-left: 4px" type="danger" link @click="remove(node, data)">
-                                删除
-                            </el-button>
+                            <el-button link type="primary" @click="append(data)">添加</el-button>
+                            <el-button link type="danger" @click="remove(data)">删除</el-button>
                         </div>
                     </div>
                 </template>
             </el-tree>
         </div>
+
         <div class="card">
-            <BomContent :clickId="clickId" />
+            <BomContent :clickId="clickId" @saved="updateNodeName" />
         </div>
     </div>
+
     <div v-if="isShowPage" class="submit-view">
         <BomInsert :parent-id="currentParentId" @cancel="handleCancel" @submit="handleSubmit" />
     </div>
 </template>
-
 <style scoped>
 .custom-tree-node {
     flex: 1;

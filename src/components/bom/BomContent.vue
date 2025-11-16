@@ -34,6 +34,8 @@ import { getBomByIdApi, saveBomApi } from '@/api/bom';
 import { reactive, ref, watch } from 'vue';
 import HoverButton from '../HoverButton.vue';
 
+const emit = defineEmits(['saved'])
+
 // 存储BOM详情数据
 const bomValue = ref({
     id: '',
@@ -52,7 +54,6 @@ const props = defineProps(['clickId']);
 // 根据ID查询BOM详情
 const search = async (id) => {
     if (!id) {
-        ElMessage.warning('未选择节点');
         return;
     }
     const result = await getBomByIdApi(id);
@@ -63,8 +64,10 @@ const search = async (id) => {
 // 侦听 clickId 变化
 watch(() => props.clickId, (newId) => {
     // 当 clickId 变化时，重新执行查询
-    search(newId);
-}, { immediate: true } // immediate: true 表示在初始绑定时也执行一次
+    if (newId) {
+        search(newId);
+    }
+}
 );
 
 const ruleFormRef = ref();
@@ -111,6 +114,7 @@ const save = () => {
             const result = await saveBomApi(bomValue.value);
             if (result.code === 200) {
                 ElMessage.success('保存成功');
+                emit('saved', bomValue.value); // 将最新节点数据传回父组件
             }
         } else {
             ElMessage.error('表单验证失败，请检查输入项');

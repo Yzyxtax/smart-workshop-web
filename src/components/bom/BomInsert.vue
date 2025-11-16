@@ -38,6 +38,7 @@ import { watch, ref, reactive } from 'vue';
 const props = defineProps(['parentId'])
 const emit = defineEmits(['cancel', 'submit'])
 const newChild = ref({
+    id: null,
     parentId: props.parentId,
     drawingNo: '',
     nameSpecification: '',

@@ -85,13 +85,15 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
 import { getStepByPageApi, deleteStepApi, updateStepApi, addStepApi } from '@/api/step'
-import { getAllEquipmentApi } from '@/api/equipment'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import StepCard from '@/components/step/StepCard.vue'
+import StepCard from '@/components/StepCard.vue'
+import { useEquipmentStore } from '@/stores/equipment'
+import { storeToRefs } from 'pinia'
 
 //所有设备信息
-const equipmentList = ref([])
-
+const equipmentStore = useEquipmentStore()
+const { equipmentList } = storeToRefs(equipmentStore)
+const { loadEquipmentData } = equipmentStore
 // 搜索条件绑定
 const searchWorkStep = reactive({
     stepName: '',
@@ -139,11 +141,6 @@ const clear = () => {
 //初始加载数据
 onMounted(async () => {
     search()
-    //获取所有设备信息
-    const result = await getAllEquipmentApi()
-    if (result.code === 200) {
-        equipmentList.value = result.data
-    }
 })
 
 //监听分页变化
@@ -179,13 +176,22 @@ const formData = reactive({
 })
 
 // 新增
-const handleAdd = () => {
+const handleAdd = async () => {
     isEdit.value = false
+    //懒加载：当点击按钮时才加载设备数据
+    if (equipmentList.value.length === 0) {
+        await loadEquipmentData()
+    }
+
     dialogVisible.value = true
 }
 
 // 编辑
-const handleEdit = () => {
+const handleEdit = async () => {
+    //懒加载：当点击按钮时才加载设备数据
+    if (equipmentList.value.length === 0) {
+        await loadEquipmentData()
+    }
     if (selectIds.value.length < 1) {
         return ElMessage.warning('请选中一条记录进行编辑')
     } else if (selectIds.value.length > 1) {

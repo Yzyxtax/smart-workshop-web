@@ -55,7 +55,6 @@
     <!-- 添加/修改员工的对话框 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle">
         <el-form :rules="rules" ref="equipmentForm" :model="equipment" label-width="80px">
-            {{ equipment }}
             <!-- 基本信息 -->
             <!-- 第一行 -->
             <el-row :gutter="20">
