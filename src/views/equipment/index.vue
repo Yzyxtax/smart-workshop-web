@@ -135,6 +135,10 @@
 import { ref, onMounted } from 'vue'
 import { queryPageApi, addApi, updateApi, queryInfoApi, deleteApi } from '@/api/equipment'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useEquipmentStore } from '@/stores/equipment'
+//设备列表信息
+const equipmentStore = useEquipmentStore()
+const { insertEquipment, updateEquipment, deleteEquipment, loadEquipmentData } = equipmentStore
 
 //搜索表单绑定对象
 const searchEquipment = ref({
@@ -166,6 +170,7 @@ const search = async () => {
 //钩子函数
 onMounted(() => {
     search()
+    loadEquipmentData()
 })
 
 //分页操作
@@ -281,11 +286,15 @@ const save = async () => {
             let result
             if (equipment.value.id) {//修改
                 result = await updateApi(equipment.value)
+                updateEquipment(equipment.value)    //更新设备信息到pinia仓库
             } else {//新增
                 result = await addApi(equipment.value)
             }
 
-            if (result.code == 200) {
+            if (result.code === 200) {
+                if (!equipment.value.id) {
+                    loadEquipmentData() //重新加载数据
+                }
                 dialogVisible.value = false
                 ElMessage.success('保存成功')
                 search()
@@ -309,6 +318,7 @@ const deleteById = async (id) => {
         if (result.code == 200) {
             ElMessage.success('删除成功')
             search()
+            deleteEquipment(id)   //从pinia仓库删除设备信息
         } else {
             ElMessage.error(`删除失败:${result.message}`)
         }
@@ -337,8 +347,11 @@ const deleteByIds = async () => {
         type: 'warning',
     }).then(async () => {
         const result = await deleteApi(multipleSelection.value)
-        if (result.code) {
+        if (result.code === 200) {
             ElMessage.success('删除成功')
+            multipleSelection.value.forEach(element => {
+                deleteEquipment(element)   //从pinia仓库删除设备信息
+            });
             search()
         } else {
             ElMessage.error(`删除失败:${result.message}`)

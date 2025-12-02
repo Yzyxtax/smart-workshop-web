@@ -203,10 +203,10 @@ const save = () => {
                             <el-menu-item index="/team" @click="addTab({ index: '/team', label: '班组管理' })"><el-icon>
                                     <User />
                                 </el-icon>班组管理</el-menu-item>
-                            <el-menu-item index="/workstation"
+                            <!-- <el-menu-item index="/workstation"
                                 @click="addTab({ index: '/workstation', label: '工位管理' })"><el-icon>
                                     <Suitcase />
-                                </el-icon>工位管理</el-menu-item>
+                                </el-icon>工位管理</el-menu-item> -->
                             <el-menu-item index="/user" @click="addTab({ index: '/user', label: '员工管理' })"><el-icon>
                                     <Avatar />
                                 </el-icon>员工管理</el-menu-item>

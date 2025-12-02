@@ -10,3 +10,6 @@ export const addStepApi = (data) => request.post('step', data)
 export const updateStepApi = (data) => request.put('step', data)
 //删除工步信息
 export const deleteStepApi = (ids) => request.delete(`step?ids=${ids}`)
+
+//查询所有工步信息
+export const getAllStepApi = () => request.get('/step/listAll')

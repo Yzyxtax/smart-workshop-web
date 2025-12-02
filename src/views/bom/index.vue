@@ -151,9 +151,8 @@ const updateNodeInTree = (tree, updated) => {
     <div class="tree">
         <div class="ElTree">
             <el-tree ref="treeRef" :data="bomTreeData" node-key="id" :highlight-current="true"
-                :expand-on-click-node="false" @node-click="handleNodeClick" @node-expand="handleNodeExpand"
-                @node-collapse="handleNodeCollapse" draggable :allow-drop="allowDrop" @node-drag-end="handleDragEnd"
-                class="my-custom-tree">
+                :expand-on-click-node="false" @node-click="handleNodeClick" default-expand-all draggable
+                :allow-drop="allowDrop" @node-drag-end="handleDragEnd" class="my-custom-tree">
                 <template #default="{ node, data }">
                     <div class="custom-tree-node">
                         <span>{{ data.label }}</span>

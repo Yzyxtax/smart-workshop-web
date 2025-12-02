@@ -1,4 +1,4 @@
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import { queryBomListApi, addBom as addBomApi, deleteBom as deleteBomApi, saveLevelApi as saveLevelApi } from "@/api/bom";
 
@@ -173,6 +173,37 @@ export const useBomStore = defineStore("bom", () => {
         return roots;
     };
 
+    // 将树形结构转化为一维数组
+    const flattenBomTree = (tree) => {
+        const result = [];
+        const traverse = (nodes) => {
+            for (const node of nodes) {
+                // 将当前节点的基本信息添加到结果数组中
+                result.push({
+                    id: node.id,
+                    label: node.label,
+                    parentId: node.parentId
+                    // 可以根据需要添加其他字段，如 expanded 等
+                });
+                // 如果有子节点，递归遍历
+                if (node.children && Array.isArray(node.children) && node.children.length > 0) {
+                    traverse(node.children);
+                }
+            }
+        };
+
+        if (tree && Array.isArray(tree)) {
+            traverse(tree);
+        }
+
+        return result;
+    };
+
+    // 实时获取扁平化的数据
+    const flattenedBomData = computed(() => {
+        return flattenBomTree(bomTreeData.value);
+    });
+
     return {
         bomTreeData,
         expandedKeys,
@@ -180,6 +211,7 @@ export const useBomStore = defineStore("bom", () => {
         addNode,
         removeNode,
         moveNode,
-        listToTree
+        listToTree,
+        flattenedBomData
     };
 });

@@ -54,17 +54,17 @@
 
     <!-- 复用的新增/编辑对话框 -->
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑工步' : '新增工步'" width="500px" @close="resetForm">
-        <el-form :model="formData" label-width="100px">
-            <el-form-item label="工步名称">
+        <el-form :rules="rules" ref="stepForm" :model="formData" label-width="100px">
+            <el-form-item label="工步名称" prop="name">
                 <el-input v-model="formData.name" />
             </el-form-item>
-            <el-form-item label="设备">
+            <el-form-item label="设备" prop="equipmentId">
                 <el-select v-model="formData.equipmentId" placeholder="请选择设备" @change="onEquipmentChange">
                     <el-option v-for="item in equipmentList" :key="item.id" :label="item.name + item.model"
                         :value="item.id" />
                 </el-select>
             </el-form-item>
-            <el-form-item label="功能">
+            <el-form-item label="功能" prop="functionId">
                 <el-select v-model="formData.functionId" placeholder="请选择设备功能">
                     <el-option v-for="func in getFunctionList(formData.equipmentId)" :key="func.id"
                         :label="func.functionDescription" :value="func.id" />
@@ -86,9 +86,14 @@
 import { reactive, ref, onMounted } from 'vue'
 import { getStepByPageApi, deleteStepApi, updateStepApi, addStepApi } from '@/api/step'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import StepCard from '@/components/StepCard.vue'
+import StepCard from '@/components/step/StepCard.vue'
 import { useEquipmentStore } from '@/stores/equipment'
+import { useStepStore } from '@/stores/step'
 import { storeToRefs } from 'pinia'
+
+//同步pinia仓库
+const stepStore = useStepStore()
+const { loadAllSteps, updateStep, deleteSteps } = stepStore
 
 //所有设备信息
 const equipmentStore = useEquipmentStore()
@@ -112,6 +117,9 @@ const background = ref(true)
 
 // 选中项
 const selectIds = ref([])
+
+//表单对象
+const stepForm = ref(null)
 
 // 搜索功能
 const search = async () => {
@@ -139,8 +147,10 @@ const clear = () => {
 }
 
 //初始加载数据
-onMounted(async () => {
+onMounted(() => {
     search()
+    loadEquipmentData()
+    loadAllSteps()
 })
 
 //监听分页变化
@@ -178,20 +188,11 @@ const formData = reactive({
 // 新增
 const handleAdd = async () => {
     isEdit.value = false
-    //懒加载：当点击按钮时才加载设备数据
-    if (equipmentList.value.length === 0) {
-        await loadEquipmentData()
-    }
-
     dialogVisible.value = true
 }
 
 // 编辑
 const handleEdit = async () => {
-    //懒加载：当点击按钮时才加载设备数据
-    if (equipmentList.value.length === 0) {
-        await loadEquipmentData()
-    }
     if (selectIds.value.length < 1) {
         return ElMessage.warning('请选中一条记录进行编辑')
     } else if (selectIds.value.length > 1) {
@@ -219,6 +220,7 @@ const handleDelete = async () => {
         const result = await deleteStepApi(selectIds.value)
         if (result.code === 200) {
             ElMessage.success('删除成功')
+            deleteSteps(selectIds.value)    //更新pinia仓库
             selectIds.value = []
             search()
         } else {
@@ -229,27 +231,66 @@ const handleDelete = async () => {
     }
 }
 
+//表单校验规则
+const rules = ref({
+    name: [
+        { required: true, message: '请输入工步名', trigger: 'blur' },
+        { min: 2, max: 20, message: '长度在 2 到 20 个字符', trigger: 'blur' }
+    ],
+    equipmentId: [
+        { required: true, message: '请选择设备', trigger: 'blur' },
+    ],
+    functionId: [
+        { required: true, message: '请选择设备功能', trigger: 'blur' }
+    ]
+})
+
 // 提交表单（新增/编辑复用）
 const submitForm = async () => {
-    let result
-    if (isEdit.value) {
-        result = await updateStepApi(formData)
-    } else {
-        result = await addStepApi(formData)
-    }
+    stepForm.value.validate(async (valid) => {
+        let result
+        if (valid) {//验证通过
+            let result
+            if (isEdit.value) {
+                result = await updateStepApi(formData)
+            } else {
+                result = await addStepApi(formData)
+            }
 
-    if (result.code === 200) {
-        ElMessage.success(isEdit.value ? '修改成功' : '新增成功')
-        dialogVisible.value = false
-        resetForm()
-        search()
-    } else {
-        ElMessage.error(`操作失败:${result.message}`)
-    }
+            if (result.code === 200) {
+                ElMessage.success(isEdit.value ? '修改成功' : '新增成功')
+                if (isEdit.value) {
+                    const newStep = {
+                        id: formData.id,
+                        name: formData.name,
+                        equipmentId: formData.equipmentId,
+                        functionId: formData.functionId,
+                        equipmentName: null,
+                        equipmentModel: null,
+                        functionDescription: null,
+                        description: formData.description,
+                        processName: []
+                    }
+                    updateStep(newStep)    //更新pinia仓库
+                } else {
+                    loadAllSteps()       //重新加载所有工步数据
+                }
+                dialogVisible.value = false
+                resetForm()
+                search()
+            } else {
+                ElMessage.error(`操作失败:${result.message}`)
+            }
+        }
+    })
 }
 
 //清空表单
 const resetForm = () => {
+    //重置表单校验状态
+    if (stepForm.value != null) {
+        stepForm.value.clearValidate()
+    }
     formData.id = null
     formData.name = ''
     formData.equipmentId = null

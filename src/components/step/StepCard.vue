@@ -70,7 +70,10 @@ const handleCheckChange = (val) => {
 
 <style scoped>
 .card {
+    --card-max-h: 260px;
+    /* 可按需调整最大高度 */
     min-width: 200px;
+    max-height: var(--card-max-h);
     background-color: #e8e8e8;
     border-radius: 10px;
     padding: 10px 0;
@@ -78,6 +81,8 @@ const handleCheckChange = (val) => {
     flex-direction: column;
     gap: 10px;
     position: relative;
+    overflow: hidden;
+    /* 保持卡片外部不滚动，内部列表滚动 */
 }
 
 .card-header {
@@ -91,14 +96,19 @@ const handleCheckChange = (val) => {
     border-top: 1.5px solid #42434a;
 }
 
+/* 列表区域限制高度并启用滚动，保证多行文本不会撑开卡片 */
 .card .list {
     list-style-type: none;
     display: flex;
     flex-direction: column;
     gap: 8px;
     padding: 0px 10px;
+    overflow-y: auto;
+    max-height: calc(var(--card-max-h) - 28px);
+    /* 留出头部与内边距空间，按需微调 */
 }
 
+/* 固定标签宽度以便对齐，内容允许换行并占剩余空间 */
 .card .list .element {
     display: flex;
     align-items: center;
@@ -111,6 +121,14 @@ const handleCheckChange = (val) => {
 
 .card .list .element .label {
     font-weight: 600;
+    width: 90px;
+    /* 固定宽度，确保各卡片同一项对齐，可调整 */
+    flex-shrink: 0;
+}
+
+.card .list .element span {
+    word-break: break-word;
+    flex: 1;
 }
 
 .card .list .element:hover {
@@ -121,5 +139,15 @@ const handleCheckChange = (val) => {
 
 .card .list .element:active {
     transform: scale(0.99);
+}
+
+/* 可选：美化滚动条（WebKit） */
+.card .list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.card .list::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
 }
 </style>

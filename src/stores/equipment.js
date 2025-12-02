@@ -12,13 +12,27 @@ export const useEquipmentStore = defineStore('equipment', () => {
     //actions
     //获取所有设备信息
     const loadEquipmentData = async () => {
-        if (equipmentList.value.length > 0) {
-            return
-        }
         const result = await getAllEquipmentApi()
         if (result.code === 200) {
             equipmentList.value = result.data
         }
     }
-    return { equipmentList, loadEquipmentData }
+    //添加设备信息
+    const insertEquipment = (equipment) => {
+        equipmentList.value.push(equipment)
+    }
+    //更新设备信息
+    const updateEquipment = (updatedEquipment) => {
+        const index = equipmentList.value.findIndex(
+            (eq) => eq.id === updatedEquipment.id
+        )
+        if (index !== -1) {
+            equipmentList.value[index] = updatedEquipment
+        }
+    }
+    //删除设备信息
+    const deleteEquipment = (id) => {
+        equipmentList.value = equipmentList.value.filter((eq) => eq.id !== id)
+    }
+    return { equipmentList, loadEquipmentData, insertEquipment, updateEquipment, deleteEquipment }
 })
