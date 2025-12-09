@@ -204,6 +204,16 @@ export const useBomStore = defineStore("bom", () => {
         return flattenBomTree(bomTreeData.value);
     });
 
+    // 计算属性：根据 bomTreeData 自动计算出产品列表
+    const productList = computed(() => {
+        return bomTreeData.value
+            .filter(node => node.parentId === "null" || node.parentId === null || node.parentId === undefined)
+            .map(node => ({
+                id: node.id,
+                name: node.label
+            }))
+    })
+
     return {
         bomTreeData,
         expandedKeys,
@@ -212,6 +222,7 @@ export const useBomStore = defineStore("bom", () => {
         removeNode,
         moveNode,
         listToTree,
-        flattenedBomData
+        flattenedBomData,
+        productList
     };
 });

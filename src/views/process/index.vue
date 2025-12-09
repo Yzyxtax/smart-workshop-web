@@ -67,6 +67,7 @@
                                     :value="item.id" />
                             </el-select>
                         </el-form-item>
+                        <el-button type="success" @click="handleAddStep">+ &nbsp; 创建工步</el-button>
                     </div>
                     <div class="panel mt">
                         <div class="panel-title">描述 / 质量检查点</div>
@@ -115,6 +116,10 @@
             </template>
         </el-form>
     </el-dialog>
+
+    <!-- 创建新工步 -->
+    <StepFormDialog v-model="stepDialogVisible" :form-data="StepformData" :equipment-list="equipmentStore.equipmentList"
+        :is-edit="false" :on-submit="performSubmit" @submit-success="onSubmitSuccess" />
 </template>
 
 <script setup>
@@ -123,19 +128,26 @@ import {
     getProcessApi,
     addProcessApi,
     deleteProcessApi,
-    updateProcessApi,
-    getAllProcessApi
+    updateProcessApi
 } from '@/api/process'
+import { addStepApi } from '@/api/step'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ProcessCard from '@/components/process/ProcessCard.vue'
+import StepFormDialog from '@/components/step/StepFormDialog.vue'
 import { useStepStore } from '@/stores/step'
 import { useBomStore } from '@/stores/bom'
+import { useEquipmentStore } from '@/stores/equipment'
+import { useProcessStore } from '@/stores/process'
 
 // 引入工步和物料仓库
 const stepStore = useStepStore()
 const bomStore = useBomStore()
+const equipmentStore = useEquipmentStore()
+const processStore = useProcessStore()
 const { loadBomData } = bomStore
 const { loadAllSteps } = stepStore
+const { loadEquipmentData } = equipmentStore
+const { loadAllProcesses } = processStore
 
 // 搜索条件绑定
 const searchProcess = reactive({
@@ -253,6 +265,7 @@ onMounted(async () => {
     try {
         if (loadBomData) await loadBomData()
         if (loadAllSteps) await loadAllSteps()
+        if (loadAllProcesses) await loadAllProcesses()
     } catch (e) {
         console.warn('load stores error', e)
     }
@@ -348,6 +361,7 @@ const handleDelete = async () => {
         const result = await deleteProcessApi(selectIds.value)
         if (result && result.code === 200) {
             ElMessage.success('删除成功')
+            processStore.deleteProcesses(selectIds.value); // 同步工序仓库
             selectIds.value = []
             search()
         } else {
@@ -373,8 +387,6 @@ const submitForm = async () => {
     }
 
     let result
-    console.log(payload);
-
     if (isEdit.value) {
         result = await updateProcessApi(payload)
     } else {
@@ -383,6 +395,12 @@ const submitForm = async () => {
 
     if (result && result.code === 200) {
         ElMessage.success(isEdit.value ? '修改成功' : '新增成功')
+        if (!isEdit.value) {
+            payload.id = Number(result.data);
+            processStore.addProcess(payload); // 同步工序仓库
+        } else {
+            processStore.updateProcess(payload); // 同步工序仓库
+        }
         dialogVisible.value = false
         resetForm()
         // 刷新数据（保持当前页）
@@ -402,6 +420,50 @@ const resetForm = () => {
     formData.inputBomId = []
     formData.outputBomId = []
     formData.workStepId = []
+}
+
+//对话框控制
+const stepDialogVisible = ref(false)
+const StepformData = ref({
+    id: null,
+    name: '',
+    description: '',
+    equipmentId: null,
+    functionId: null
+})
+
+// 执行实际的 API 提交操作
+const performSubmit = async (submitData) => {
+    let result;
+    result = await addStepApi(submitData);
+    if (result.code !== 200) {
+        throw new Error(result.message || '操作失败');
+    }
+    return result;
+};
+
+// 提交成功后的处理
+const onSubmitSuccess = () => {
+    ElMessage.success('新增成功');
+    stepStore.loadAllSteps(); // 重新加载所有工步数据
+    resetStepFormData(); // 重置表单数据
+};
+
+// 重置工步表单数据到初始状态
+const resetStepFormData = () => {
+    StepformData.id = null;
+    StepformData.name = '';
+    StepformData.equipmentId = null;
+    StepformData.functionId = null;
+    StepformData.description = '';
+};
+
+//创建新工步
+const handleAddStep = () => {
+    loadEquipmentData()
+    // 重置表单数据
+    resetStepFormData();
+    stepDialogVisible.value = true
 }
 </script>
 
