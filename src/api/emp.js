@@ -15,3 +15,6 @@ export const updateApi = (emp) => request.put('user', emp);
 
 //删除
 export const deleteApi = (ids) => request.delete(`user?ids=${ids}`);
+
+// 查询没加入班组的员工
+export const queryNoTeamEmpApi = () => request.get('user/join');

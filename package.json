@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@antv/g6": "^5.0.50",
+    "@antv/x6": "^3.1.2",
+    "@antv/x6-vue-shape": "^3.0.2",
     "axios": "^1.12.2",
     "element-plus": "^2.11.4",
     "pinia": "^3.0.3",

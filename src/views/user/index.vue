@@ -88,6 +88,18 @@
                     </el-form-item>
                 </el-col>
             </el-row>
+
+            <!-- 第三行 ...  员工技能 -->
+            <el-row :gutter="3">
+                <el-col :span="24">
+                    <el-form-item>
+                        <el-select v-model="employee.processName" multiple placeholder="请选择技能">
+                            <el-option v-for="processList in processStore.processList" :key="processList.id"
+                                :label="processList.processName" :value="processList.processName" />
+                        </el-select>
+                    </el-form-item>
+                </el-col>
+            </el-row>
         </el-form>
 
         <!-- 底部按钮 -->
@@ -104,13 +116,18 @@
 import { ref, watch, onMounted } from 'vue'
 import { queryPageApi, addApi, queryInfoApi, updateApi, deleteApi } from '@/api/emp'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useProcessStore } from '@/stores/process'
+
+//工步数据
+const processStore = useProcessStore()
+const { loadAllProcesses } = processStore
 
 //元数据
 const jobs = ref([
     { value: '生产主管', name: '生产主管' },
     { value: '工艺工程师', name: '工艺工程师' },
     { value: '人事主管', name: '人事主管' },
-    { value: '员工', name: '员工' },
+    { value: '工人', name: '工人' },
     { value: '班组长', name: '班组长' },
     { value: '车间主任', name: '车间主任' }
 ])
@@ -142,8 +159,9 @@ const search = async () => {
     }
 }
 //钩子函数
-onMounted(() => {
-    search()
+onMounted(async () => {
+    await search()
+    loadAllProcesses()
 })
 
 //清空页表数据
@@ -171,7 +189,8 @@ const employee = ref({
     userName: '',
     name: '',
     position: '',
-    permissionLevel: ''
+    permissionLevel: '',
+    processName: []
 })
 
 // 控制弹窗
@@ -187,7 +206,8 @@ const addEmp = () => {
         userName: '',
         name: '',
         position: '',
-        permissionLevel: ''
+        permissionLevel: '',
+        processName: []
     }
     //重置表单校验状态
     if (employeeForm.value != null) {

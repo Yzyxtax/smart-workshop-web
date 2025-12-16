@@ -106,7 +106,7 @@
             </el-row>
 
             <!-- 第五行 ...  设备功能 -->
-            <el-row :gutter="3" v-for="item in equipment.description">
+            <el-row :gutter="3" v-for="(item, index) in equipment.description">
                 <el-col :span="22">
                     <el-form-item>
                         <el-input v-model="item.functionDescription" type="textarea" />

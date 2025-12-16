@@ -160,8 +160,8 @@
                         <el-option label="无效" value="无效" />
                     </el-select>
                 </el-form-item>
-                <el-form-item label="标准工时(小时)">
-                    <el-input v-model="currentFlowData.plannedWorkingHours" type="number" placeholder="请输入标准工时" />
+                <el-form-item label="标准工时">
+                    <el-input v-model="currentFlowData.plannedWorkingHours" type="number" placeholder="请输入标准工时(小时)" />
                 </el-form-item>
             </el-form>
             <template #footer>
@@ -177,7 +177,7 @@ import { onMounted, ref, nextTick } from 'vue'
 import { getAllFlowApi, addFlowApi, updateFlowApi, deleteFlowApi, getFlowChartApi, saveFlowChartApi } from '@/api/flow'
 import { addProcessApi, updateProcessApi } from '@/api/process'
 import { updateStepApi, addStepApi } from '@/api/step'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElContainer, ElMain, ElAside } from 'element-plus'
 import { Graph } from '@antv/x6'
 import ProcessFormDialog from '@/components/process/ProcessFormDialog.vue'
 import FlowCard from '@/components/flows/FlowCard.vue'
@@ -1013,9 +1013,9 @@ const getStepNameById = (id) => {
 const selectedStep = ref(null)
 //显示工步详情
 const showStepDetails = (event) => {
-    const { processId } = event
-    //根据工序id寻找对应工步
-    const step = stepStore.stepList.find(s => s.id === processId)
+    const { workStepName } = event
+    //根据工步名称寻找对应工步
+    const step = stepStore.stepList.find(s => s.name === workStepName)
     if (step) {
         //显示工步详情
         selectedStep.value = handleSelectedStep(step)
@@ -1288,6 +1288,11 @@ const getRawFlowById = (id) => {
 
 // 打开工艺流程对话框 
 const openFlowDialog = (id = null, editMode = false) => {
+    //先清除表单验证状态
+    if (flowFormRef.value) {
+        flowFormRef.value.clearValidate()
+    }
+
     isFlowEdit.value = editMode
     if (id && editMode) {
         const flowData = getRawFlowById(id)
@@ -1417,7 +1422,7 @@ const deleteFlow = async () => {
 }
 
 /* 使 Element Plus 的 el-aside 元素可视化（在 scoped 下使用 ::v-deep） */
-.flows-wrapper ::v-deep .el-aside {
+.flows-wrapper :deep(.el-aside) {
     background: #ffffff;
     border: 1px solid #e6e6e6;
     border-radius: 8px;
@@ -1425,7 +1430,7 @@ const deleteFlow = async () => {
 }
 
 /* 标题区域样式 */
-.flows-wrapper ::v-deep .el-aside h2 {
+.flows-wrapper :deep(.el-aside) h2 {
     margin: 0;
     padding: 12px;
     font-size: 16px;
@@ -1447,17 +1452,17 @@ const deleteFlow = async () => {
 }
 
 /* 菜单视觉微调 */
-.flows-wrapper ::v-deep .el-menu {
+.flows-wrapper :deep(.el-menu) {
     background: transparent;
     border-radius: 6px;
 }
 
-.flows-wrapper ::v-deep .el-menu .el-menu-item {
+.flows-wrapper :deep(.el-menu .el-menu-item) {
     padding-left: 36px;
 }
 
 /* 子菜单标题对齐图标 */
-.flows-wrapper ::v-deep .el-submenu__title {
+.flows-wrapper :deep(.el-submenu__title) {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1481,7 +1486,7 @@ const deleteFlow = async () => {
 }
 
 /* 当 Element Plus 内部对 el-main 做包装时的兼容选择器（保底）*/
-.flows-wrapper ::v-deep .main-area {
+.flows-wrapper :deep(.main-area) {
     background: linear-gradient(180deg, #ffffff, #fbfdff);
     border: 1px solid #e6eef8;
     border-radius: 10px;
