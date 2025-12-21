@@ -13,13 +13,22 @@ const { loadBomData, addNode, removeNode, moveNode } = bomStore;
 
 const clickId = ref(null);
 const treeRef = ref(null);
+const isLoading = ref(true);
 
 onMounted(async () => {
+    isLoading.value = true;
     await loadBomData();
+    isLoading.value = false;
     if (bomTreeData.value.length > 0) {
         clickId.value = bomTreeData.value[0].id;
     }
 });
+
+//添加根节点
+const addRoot = () => {
+    currentParentId.value = null;
+    isShowPage.value = true;
+};
 
 // 保存展开状态
 const handleNodeExpand = (data, node) => {
@@ -147,6 +156,9 @@ const updateNodeInTree = (tree, updated) => {
     <div class="page">
         <h1>产品管理</h1>
     </div>
+    <div>
+        <el-button v-if="!isLoading && bomTreeData.length === 0" type="primary" @click="addRoot">添加物料</el-button>
+    </div>
 
     <div class="tree">
         <div class="ElTree">
@@ -193,6 +205,7 @@ const updateNodeInTree = (tree, updated) => {
     box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
     display: flex;
     justify-content: space-around;
+    position: relative;
 }
 
 .ElTree {

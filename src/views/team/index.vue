@@ -164,18 +164,24 @@ const loadTeamDetails = async (teamNo) => {
 }
 
 //查询无班组员工
-const noTeamEmps = ref([])
+const noTeamEmps = ref({
+    empList: [],
+    leaderList: []
+})
 const queryNoTeamEmp = async () => {
     try {
         const resp = await queryNoTeamEmpApi()
         if (resp && resp.code === 200) {
-            noTeamEmps.value = resp.data || []
+            if (isEdit.value) {
+                noTeamEmps.value.empList = [...noTeamEmps.value.empList, ...resp.data.empList] || []
+                noTeamEmps.value.leaderList = [...noTeamEmps.value.leaderList, ...resp.data.leaderList] || []
+            } else {
+                noTeamEmps.value = resp.data
+            }
         } else {
-            noTeamEmps.value = []
             ElMessage.error('获取无班组员工失败')
         }
     } catch (err) {
-        noTeamEmps.value = []
         ElMessage.error('获取无班组员工出错')
     }
 }
@@ -243,11 +249,13 @@ const openEditDialog = async (teamItem) => {
             form.teamNo = data.teamNo || ''
             form.teamName = data.teamName || ''
             form.teamLocation = data.teamLocation || ''
-            form.teamLeader = data.teamLeader || ''
-            form.userName = Array.isArray(data.userName) ? data.userName : (data.userName ? data.userName : [])
+            form.teamLeader = data.leaderName || ''
+            form.userName = data.userName.filter(name => name !== resp.data.leaderName)
             originalTeamNo.value = data.teamNo || teamItem.teamNo || ''
 
             dialogVisible.value = true
+            noTeamEmps.value.empList = form.userName
+            noTeamEmps.value.leaderList = [form.teamLeader]
             //查询无班组员工
             queryNoTeamEmp();
         } else {
