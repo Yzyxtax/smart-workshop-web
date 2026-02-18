@@ -3,7 +3,7 @@ import { addBom, deleteBom, saveLevelApi } from "@/api/bom";
 import BomContent from "@/components/bom/BomContent.vue";
 import BomInsert from "@/components/bom/BomInsert.vue";
 import { ref, onMounted, nextTick } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { useBomStore } from "@/stores/bom";
 import { storeToRefs } from "pinia";
 
@@ -13,15 +13,9 @@ const { loadBomData, addNode, removeNode, moveNode } = bomStore;
 
 const clickId = ref(null);
 const treeRef = ref(null);
-const isLoading = ref(true);
 
 onMounted(async () => {
-    isLoading.value = true;
     await loadBomData();
-    isLoading.value = false;
-    if (bomTreeData.value.length > 0) {
-        clickId.value = bomTreeData.value[0].id;
-    }
 });
 
 //添加根节点
@@ -57,13 +51,26 @@ const handleCancel = () => {
     isShowPage.value = false;
 };
 
-// 新增提交
+//新增提交
 const handleSubmit = async (childData) => {
     const result = await addBom(childData);
     if (result.code === 200) {
         ElMessage.success("添加成功");
         childData.id = result.data;
-        addNode(currentParentId.value, childData); // 局部更新
+
+        // 处理添加到根节点的情况
+        if (currentParentId.value === null) {
+            // 添加到根节点
+            bomTreeData.value.push({
+                id: childData.id,
+                label: childData.nameSpecification,
+                parentId: null,
+                children: []
+            });
+        } else {
+            addNode(currentParentId.value, childData); // 添加到指定父节点
+        }
+
         isShowPage.value = false;
     } else {
         ElMessage.error(result.message);
@@ -81,14 +88,32 @@ const collectIds = (node) => {
 
 // 删除节点
 const remove = async (data) => {
-    const ids = collectIds(data);
-    const result = await deleteBom(ids);
+    // 弹出确认对话框
+    try {
+        await ElMessageBox.confirm(
+            `确定要删除 "${data.label}" 及其所有子项吗？此操作无法撤销！`,
+            '删除确认',
+            {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning',
+                draggable: true
+            }
+        );
 
-    if (result.code === 200) {
-        ElMessage.success("删除成功");
-        removeNode(data.id); // 局部更新
-    } else {
-        ElMessage.error(result.message);
+        // 用户点击确定后执行删除操作
+        const ids = collectIds(data);
+        const result = await deleteBom(ids);
+
+        if (result.code === 200) {
+            ElMessage.success("删除成功");
+            removeNode(data.id); // 局部更新
+        } else {
+            ElMessage.error(result.message);
+        }
+    } catch (error) {
+        // 用户点击取消或关闭对话框
+        ElMessage.info("已取消删除");
     }
 };
 
@@ -157,7 +182,7 @@ const updateNodeInTree = (tree, updated) => {
         <h1>产品管理</h1>
     </div>
     <div>
-        <el-button v-if="!isLoading && bomTreeData.length === 0" type="primary" @click="addRoot">添加物料</el-button>
+        <el-button type="primary" @click="addRoot">添加产品</el-button>
     </div>
 
     <div class="tree">
@@ -239,10 +264,12 @@ const updateNodeInTree = (tree, updated) => {
     position: fixed;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -145%);
+    transform: translate(-50%, -50%);
     width: 700px;
-    padding: 5px;
+    padding: 20px;
     border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 2001;
+    /* 提高 z-index 值，确保高于 BomContent 组件的 z-index (2000) */
 }
 </style>

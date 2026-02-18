@@ -4,7 +4,7 @@ import request from "../utils/request";
 export const queryPageApi = (name, position, begin, end, page, pageSize) =>
     request.get(`user?name=${name}&position=${position}&begin=${begin}&end=${end}&page=${page}&pageSize=${pageSize}`);
 
-//根据id查询部门
+//根据id查询员工
 export const queryInfoApi = (id) => request.get(`user/${id}`);
 
 //新增

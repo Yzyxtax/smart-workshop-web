@@ -17,3 +17,6 @@ export const getLineComposeApi = (lineNo) => request.get(`/line/compose/${lineNo
 
 //保存产线班组组成
 export const updateLineComposeApi = (data) => request.put('/line/compose', data)
+
+//查询某个产线信息
+export const getLineApi = (lineNo) => request.get(`/line/${lineNo}`)

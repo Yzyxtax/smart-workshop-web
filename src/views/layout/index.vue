@@ -51,30 +51,30 @@ const removeTab = (targetName) => {
     const tabs = editableTabs.value
     let activeName = editableTabsValue.value
 
+    // 找到要删除的标签页索引
+    const targetIndex = tabs.findIndex(tab => tab.name === targetName)
+
+    if (targetIndex === -1) return // 没找到要删除的标签页
+
+    // 如果删除的是当前激活的标签页
     if (activeName === targetName) {
-        tabs.forEach((tab, index) => {
-            if (tab.name === targetName) {
-                const nextTab = tabs[index + 1] || tabs[index - 1]
-                if (nextTab) {
-                    activeName = nextTab.name
-                }
-            }
-        })
+        // 尝试选中下一个标签页，否则选中上一个
+        const nextTab = tabs[targetIndex + 1] || tabs[targetIndex - 1]
+        activeName = nextTab ? nextTab.name : ''  // 如果没有相邻标签页，设为空
     }
 
+    // 更新标签页状态
     editableTabsValue.value = activeName
     editableTabs.value = tabs.filter((tab) => tab.name !== targetName)
 
-    // 如果有新的活动标签页，导航到该路由
-    if (activeName && activeName !== targetName) {
+    // 路由同步
+    if (activeName) {
+        // 如果还有激活的标签页，跳转到该标签页对应的路由
         router.push(activeName)
-    } else if (!activeName && editableTabs.value.length > 0) {
-        // 如果当前没有活动标签页，但还有其他标签页，则跳转到第一个
-        const firstTab = editableTabs.value[0]
-        if (firstTab) {
-            editableTabsValue.value = firstTab.name
-            router.push(firstTab.name)
-        }
+    } else if (editableTabs.value.length === 0) {
+        // 如果没有标签页了，重定向到主页
+        editableTabsValue.value = ''  // 清空激活状态
+        router.push('/')  // 重定向到主页
     }
 }
 
@@ -162,6 +162,9 @@ const save = () => {
         }
     })
 }
+
+//本地持久化信息
+const user = JSON.parse(localStorage.getItem('user'));
 </script>
 
 <template>
@@ -179,6 +182,8 @@ const save = () => {
                     <span>&nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp;</span>
                     <a href="">退出登陆</a>
                     <HoverButton color="rgb(255,65,65)" text="out" icon="logout" icon-color="white" @press="logout" />
+                    <span>&nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp;</span>
+                    {{ '您好，' + user.name }}
                 </span>
             </el-header>
 
@@ -237,6 +242,58 @@ const save = () => {
                             <el-menu-item index="/step" @click="addTab({ index: '/step', label: '工步管理' })"><el-icon>
                                     <Brush />
                                 </el-icon>工步管理</el-menu-item>
+                        </el-sub-menu>
+
+                        <el-sub-menu index="/operation">
+                            <template #title>
+                                <el-icon>
+                                    <Setting />
+                                </el-icon>
+                                <span>生产管理</span>
+                            </template>
+                            <el-menu-item index="/plan" @click="addTab({ index: '/plan', label: '计划管理' })"><el-icon>
+                                    <Compass />
+                                </el-icon>计划管理</el-menu-item>
+                            <el-menu-item index="/order" @click="addTab({ index: '/order', label: '订单管理' })"><el-icon>
+                                    <Document />
+                                </el-icon>订单管理</el-menu-item>
+                        </el-sub-menu>
+
+                        <el-sub-menu index="/workshop">
+                            <template #title>
+                                <el-icon>
+                                    <OfficeBuilding />
+                                </el-icon>
+                                <span>车间管理</span>
+                            </template>
+                            <el-menu-item index="/order" @click="addTab({ index: '/order', label: '订单管理' })"><el-icon>
+                                    <Document />
+                                </el-icon>订单管理</el-menu-item>
+                            <el-menu-item index="/workOrder"
+                                @click="addTab({ index: '/workOrder', label: '工单管理' })"><el-icon>
+                                    <Notebook />
+                                </el-icon>工单管理</el-menu-item>
+                            <el-menu-item index="/progress"
+                                @click="addTab({ index: '/progress', label: '进度管理' })"><el-icon>
+                                    <Sort />
+                                </el-icon>进度管理</el-menu-item>
+                        </el-sub-menu>
+
+                        <el-sub-menu index="/manufacture">
+                            <template #title>
+                                <el-icon>
+                                    <Money />
+                                </el-icon>
+                                <span>生产执行</span>
+                            </template>
+                            <el-menu-item index="/workOrder"
+                                @click="addTab({ index: '/workOrder', label: '工单管理' })"><el-icon>
+                                    <Notebook />
+                                </el-icon>工单管理</el-menu-item>
+                            <el-menu-item index="/execute"
+                                @click="addTab({ index: '/execute', label: '工单执行' })"><el-icon>
+                                    <Timer />
+                                </el-icon>工单执行</el-menu-item>
                         </el-sub-menu>
                     </el-menu>
                 </el-aside>

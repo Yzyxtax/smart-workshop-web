@@ -214,6 +214,26 @@ export const useBomStore = defineStore("bom", () => {
             }))
     })
 
+    //根据id获取节点
+    const getBomById = (id) => {
+        const findInTree = (nodes) => {
+            for (const node of nodes) {
+                if (node.id === id) {
+                    return node
+                }
+                if (node.children && node.children.length > 0) {
+                    const found = findInTree(node.children)
+                    if (found) {
+                        return found
+                    }
+                }
+            }
+            return null
+        }
+
+        return findInTree(bomTreeData.value)
+    }
+
     return {
         bomTreeData,
         expandedKeys,
@@ -223,6 +243,7 @@ export const useBomStore = defineStore("bom", () => {
         moveNode,
         listToTree,
         flattenedBomData,
-        productList
+        productList,
+        getBomById
     };
 });

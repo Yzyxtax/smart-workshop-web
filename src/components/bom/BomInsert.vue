@@ -2,22 +2,22 @@
     <div>
         <el-form :inline="true" :model="newChild" ref="ruleFormRef" :rules="rules" label-width="auto">
             <el-form-item label="名称及型号" prop="nameSpecification">
-                <el-input v-model="newChild.nameSpecification" />
+                <el-input v-model="newChild.nameSpecification" style="width: 100%" />
             </el-form-item>
             <el-form-item label="图号">
-                <el-input v-model="newChild.drawingNo" />
+                <el-input v-model="newChild.drawingNo" style="width: 100%" />
             </el-form-item>
             <el-form-item label="材料">
-                <el-input v-model="newChild.material" />
+                <el-input v-model="newChild.material" style="width: 100%" />
             </el-form-item>
             <el-form-item label="数量" prop="quantity">
-                <el-input v-model="newChild.quantity" />
+                <el-input v-model="newChild.quantity" style="width: 100%" />
             </el-form-item>
             <el-form-item label="单件重量" prop="unitWeight">
-                <el-input v-model="newChild.unitWeight" />
+                <el-input v-model="newChild.unitWeight" style="width: 100%" />
             </el-form-item>
-            <el-form-item label="类型" prop="type" label-width="100px">
-                <el-select v-model="newChild.type" placeholder="类型">
+            <el-form-item label="类型" prop="type">
+                <el-select v-model="newChild.type" placeholder="类型" style="width: 100%">
                     <el-option label="自制件" value="自制件" />
                     <el-option label="组合件" value="组合件" />
                     <el-option label="外购件" value="外购件" />
@@ -105,10 +105,28 @@ const cancel = () => {
 }
 </script>
 
-<style>
+<style scoped>
 /* 按钮布局 */
 .button-area {
     display: flex;
     justify-content: space-around;
+    margin-top: 20px;
+}
+
+/* 设置表单样式 */
+.bom-insert :deep(.el-form-item) {
+    margin-bottom: 15px;
+}
+
+/* 强制设置输入框和选择框的宽度 */
+.bom-insert :deep(.el-input),
+.bom-insert :deep(.el-select) {
+    width: 100% !important;
+}
+
+/* 或者针对 el-select 单独设置 */
+.bom-insert :deep(.el-select) {
+    width: 100% !important;
+    min-width: 200px;
 }
 </style>

@@ -92,7 +92,7 @@
             <!-- 第三行 ...  员工技能 -->
             <el-row :gutter="3">
                 <el-col :span="24">
-                    <el-form-item>
+                    <el-form-item label="技能信息">
                         <el-select v-model="employee.processName" multiple placeholder="请选择技能">
                             <el-option v-for="processList in processStore.processList" :key="processList.id"
                                 :label="processList.processName" :value="processList.processName" />

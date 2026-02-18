@@ -15,3 +15,6 @@ export const updateProcessApi = (data) => request.put('process', data)
 
 //查询所有工序信息
 export const getAllProcessApi = () => request.get('/process/listAll')
+
+//查询工序名称
+export const getProcessNameApi = (processId) => request.get(`/process/${processId}`)
