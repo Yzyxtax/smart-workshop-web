@@ -193,6 +193,103 @@
     </div>
   </div>
 
+    <!-- 新建/编辑计划对话框 -->
+    <el-dialog
+      v-model="dialogVisible"
+      :title="isEdit ? '编辑计划' : '新建计划'"
+      width="620px"
+      @close="resetForm"
+    >
+      <div v-if="isEdit" class="current-status-bar">
+        <span>当前状态:</span>
+        <el-tag :type="getStatusType(selectedPlan?.status)" size="small">
+          {{ STATUS_LABELS[selectedPlan?.status] }}
+        </el-tag>
+      </div>
+      <el-form :model="formData" label-width="120px">
+        <el-form-item label="计划编号">
+          <template v-if="isFieldEditable('planNo')">
+            <el-input v-model="formData.planNo" placeholder="如 PLAN-20260611-001" />
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.planNo }}</span>
+            <span class="locked-tag">🔒 已发布不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="计划名称">
+          <template v-if="isFieldEditable('planName')">
+            <el-input v-model="formData.planName" placeholder="请输入计划名称" />
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.planName }}</span>
+            <span class="locked-tag">🔒 已发布不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="BOM ID">
+          <template v-if="isFieldEditable('bomId')">
+            <el-input-number v-model="formData.bomId" :min="1" placeholder="关联 BOM ID" />
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.bomId }}</span>
+            <span class="locked-tag">🔒 已发布不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="计划数量">
+          <template v-if="isFieldEditable('planNum')">
+            <el-input-number v-model="formData.planNum" :min="1" placeholder="计划生产数量" />
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.planNum }}</span>
+            <span class="locked-tag">🔒 当前状态不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="优先级">
+          <template v-if="isFieldEditable('priority')">
+            <el-select v-model="formData.priority" placeholder="请选择优先级">
+              <el-option label="高" value="高" />
+              <el-option label="中" value="中" />
+              <el-option label="低" value="低" />
+            </el-select>
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.priority || '-' }}</span>
+            <span class="locked-tag">🔒 当前状态不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="计划开始时间">
+          <el-date-picker
+            v-model="formData.startTime"
+            type="date"
+            placeholder="选择开始日期"
+            :disabled="!isFieldEditable('startTime')"
+            value-format="YYYY-MM-DD"
+          />
+        </el-form-item>
+        <el-form-item label="计划结束时间">
+          <el-date-picker
+            v-model="formData.endTime"
+            type="date"
+            placeholder="选择结束日期"
+            :disabled="!isFieldEditable('endTime')"
+            value-format="YYYY-MM-DD"
+          />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input
+            v-model="formData.remark"
+            type="textarea"
+            :rows="3"
+            placeholder="备注信息"
+            :disabled="!isFieldEditable('remark')"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleFormSubmit">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 门禁检查面板 -->
     <el-dialog
       v-model="gateDialogVisible"
@@ -502,6 +599,13 @@ const getEditableFields = (status) => {
   return []
 }
 
+const isFieldEditable = (fieldName) => {
+  if (!isEdit.value) return true // 新建时全部可编辑
+  return getEditableFields(selectedPlan.value?.status).includes(fieldName)
+}
+
+const resetForm = () => {}
+
 const openCreateDialog = () => {
   isEdit.value = false
   editingPlanNo.value = ''
@@ -740,4 +844,7 @@ onMounted(async () => {
 .gate-check-detail { font-size: 12px; margin-top: 6px; padding: 6px 10px; border-radius: 4px; }
 .gate-check-detail.success { background: #f0f9eb; color: #67c23a; }
 .gate-check-detail.fail { background: #fef0f0; color: #f56c6c; }
+.current-status-bar { padding: 8px 12px; background: #f5f7fa; border-radius: 4px; margin-bottom: 16px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.locked-field { font-size: 13px; }
+.locked-tag { font-size: 10px; padding: 1px 6px; background: #f4f4f5; border-radius: 3px; color: #909399; margin-left: 8px; }
 </style>
