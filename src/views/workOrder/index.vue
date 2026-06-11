@@ -102,6 +102,13 @@
               {{ btn.label }}
             </el-button>
             <el-button v-if="canEdit" size="small" type="info" plain @click="openEditDialog">✏️ 编辑</el-button>
+            <el-button
+              v-if="selectedWorkOrder?.status === 'RUNNING'"
+              type="primary"
+              plain
+              size="small"
+              @click="openReportDialog"
+            >📊 上报产量</el-button>
           </div>
         </div>
 
@@ -147,6 +154,133 @@
       <el-empty v-else description="请选择左侧工单查看详情" />
     </div>
   </div>
+
+    <!-- 产量上报弹窗 -->
+    <el-dialog v-model="reportDialogVisible" title="📊 上报产量" width="540px" :close-on-click-modal="false">
+      <div class="report-header">
+        <span>工单 {{ selectedWorkOrder?.workOrderNo }}</span>
+        <span>· 工序: {{ selectedWorkOrder?.processId }}</span>
+        <span>· 当前累计 {{ selectedWorkOrder?.actualQuantity || 0 }}/{{ selectedWorkOrder?.plannedQuantity }}</span>
+      </div>
+
+      <el-table :data="reportHistory" size="small" style="margin:12px 0;">
+        <el-table-column prop="time" label="时间" width="140" />
+        <el-table-column prop="quantity" label="本次产量" width="90" align="center" />
+        <el-table-column prop="scrap" label="本次报废" width="90" align="center" />
+        <el-table-column prop="cumulative" label="累计产量" width="90" align="center" />
+      </el-table>
+      <el-empty v-if="reportHistory.length === 0" description="暂无上报记录" />
+
+      <el-divider />
+      <div class="report-form">
+        <h4>📝 本次上报</h4>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="本次完成数量">
+              <el-input-number v-model="reportForm.quantity" :min="0" placeholder="输入本次产量" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="本次报废数量">
+              <el-input-number v-model="reportForm.scrap" :min="0" placeholder="输入报废数" style="width:100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <div class="report-preview">
+          上报后累计: 产量
+          <strong>{{ selectedWorkOrder?.actualQuantity || 0 }} → {{ predictedQuantity }}</strong>
+          | 报废
+          <strong>{{ selectedWorkOrder?.scrapQuantity || 0 }} → {{ predictedScrap }}</strong>
+          | 剩余计划: {{ remainingPlan }}
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="reportDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmReport">确认上报</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 新建/编辑工单对话框 -->
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑工单' : '新建工单'" width="580px" @close="resetForm">
+      <div v-if="isEdit" class="current-status-bar">
+        <span>当前状态:</span>
+        <el-tag :type="getStatusType(selectedWorkOrder?.status)" size="small">{{ STATUS_LABELS[selectedWorkOrder?.status] }}</el-tag>
+      </div>
+      <el-form :model="formData" label-width="120px">
+        <el-form-item label="所属订单">
+          <template v-if="isFieldEditable('orderNo')">
+            <el-input v-model="formData.orderNo" placeholder="订单编号" />
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.orderNo }}</span><span class="locked-tag">🔒 已派工不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="工序ID">
+          <template v-if="isFieldEditable('processId')">
+            <el-input-number v-model="formData.processId" :min="1" />
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.processId }}</span><span class="locked-tag">🔒 已派工不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="派工人员ID">
+          <template v-if="isFieldEditable('userId')">
+            <el-input-number v-model="formData.userId" :min="1" />
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.userId }}</span><span class="locked-tag">🔒 已派工不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="是否关键工单">
+          <template v-if="isFieldEditable('isCritical')">
+            <el-switch v-model="formData.isCritical" active-text="⭐ 是" inactive-text="否" />
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.isCritical ? '⭐ 是' : '否' }}</span><span class="locked-tag">🔒 已派工不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="计划数量">
+          <el-input-number v-model="formData.plannedQuantity" :min="1" :disabled="!isFieldEditable('plannedQuantity')" />
+        </el-form-item>
+        <el-form-item v-if="selectedWorkOrder?.status === STATUS.RUNNING && isEdit" label="实际完成数量">
+          <el-input-number v-model="formData.actualQuantity" :min="0" />
+        </el-form-item>
+        <el-form-item v-if="selectedWorkOrder?.status === STATUS.RUNNING && isEdit" label="报废数量">
+          <el-input-number v-model="formData.scrapQuantity" :min="0" />
+        </el-form-item>
+        <el-form-item label="计划开始时间">
+          <el-date-picker v-model="formData.startTime" type="datetime" :disabled="!isFieldEditable('startTime')" value-format="YYYY-MM-DD HH:mm:ss" />
+        </el-form-item>
+        <el-form-item label="计划结束时间">
+          <el-date-picker v-model="formData.endTime" type="datetime" :disabled="!isFieldEditable('endTime')" value-format="YYYY-MM-DD HH:mm:ss" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="formData.remark" type="textarea" :rows="3" :disabled="!isFieldEditable('remark')" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleFormSubmit">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 工单级联预览（TERMINATE 时） -->
+    <el-dialog v-model="cascadeDialogVisible" title="作废工单 — 影响确认" width="480px">
+      <el-alert title="作废为终态操作，不可逆。确认作废该工单？" type="warning" :closable="false" show-icon style="margin-bottom:12px;" />
+      <el-descriptions :column="1" border size="small">
+        <el-descriptions-item label="工单">{{ selectedWorkOrder?.workOrderNo }}</el-descriptions-item>
+        <el-descriptions-item label="当前状态">
+          <el-tag :type="getStatusType(selectedWorkOrder?.status)" size="small">{{ STATUS_LABELS[selectedWorkOrder?.status] }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="目标状态">已作废（终态）</el-descriptions-item>
+        <el-descriptions-item v-if="selectedWorkOrder?.isCritical" label="⚠ 注意">此工单为关键工单，作废将影响订单状态聚合</el-descriptions-item>
+      </el-descriptions>
+      <template #footer>
+        <el-button @click="cascadeDialogVisible = false">取消</el-button>
+        <el-button type="danger" @click="confirmTerminate">确认作废</el-button>
+      </template>
+    </el-dialog>
 </template>
 
 <script setup>
@@ -154,7 +288,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useWorkOrderStore } from '@/stores/workOrder'
-import { executeWorkOrderActionApi } from '@/api/workOrder'
+import { executeWorkOrderActionApi, updateWorkOrderApi, addWorkOrderApi, deleteWorkOrderApi } from '@/api/workOrder'
 
 // ===== 状态常量 =====
 const STATUS = {
@@ -294,16 +428,8 @@ const currentStepIndex = computed(() => {
 })
 
 const handleWorkOrderAction = (action) => {
-  // TERMINATE 需确认（级联预览在 Task 14 完善），其他直接执行
-  if (action === 'TERMINATE') {
-    ElMessageBox.confirm(
-      '确认作废该工单？作废为终态操作不可逆。',
-      '确认作废',
-      { confirmButtonText: '确认作废', cancelButtonText: '取消', type: 'warning' }
-    ).then(() => executeAction(action)).catch(() => {})
-  } else {
-    executeAction(action)
-  }
+  if (action === 'TERMINATE') return openWOCascadePreview()
+  executeAction(action)
 }
 
 const executeAction = async (action) => {
@@ -318,6 +444,136 @@ const executeAction = async (action) => {
       if (ref) selectedWorkOrder.value = ref
     } else { ElMessage.error(result.message || '操作失败') }
   } catch { ElMessage.error('操作请求失败') }
+}
+
+// ===== 产量上报 =====
+const reportDialogVisible = ref(false)
+const reportHistory = ref([])
+const reportForm = ref({ quantity: 0, scrap: 0 })
+
+const predictedQuantity = computed(() =>
+  (selectedWorkOrder.value?.actualQuantity || 0) + (reportForm.value.quantity || 0)
+)
+const predictedScrap = computed(() =>
+  (selectedWorkOrder.value?.scrapQuantity || 0) + (reportForm.value.scrap || 0)
+)
+const remainingPlan = computed(() =>
+  Math.max(0, (selectedWorkOrder.value?.plannedQuantity || 0) - predictedQuantity.value)
+)
+
+const openReportDialog = () => {
+  reportForm.value = { quantity: 0, scrap: 0 }
+  reportHistory.value = []
+  reportDialogVisible.value = true
+}
+
+const confirmReport = async () => {
+  try {
+    const wo = selectedWorkOrder.value
+    const newActual = (wo.actualQuantity || 0) + (reportForm.value.quantity || 0)
+    const newScrap = (wo.scrapQuantity || 0) + (reportForm.value.scrap || 0)
+    const result = await updateWorkOrderApi(wo.workOrderNo, {
+      actualQuantity: newActual,
+      scrapQuantity: newScrap
+    })
+    if (result.code === 200) {
+      ElMessage.success('产量上报成功')
+      reportDialogVisible.value = false
+      await workOrderStore.loadAllWorkOrders()
+      const ref = workOrderStore.workOrderList.find(w => w.workOrderNo === wo.workOrderNo)
+      if (ref) selectedWorkOrder.value = ref
+    } else { ElMessage.error(result.message || '上报失败') }
+  } catch { ElMessage.error('上报请求失败') }
+}
+
+// ===== 工单级联预览 =====
+const cascadeDialogVisible = ref(false)
+
+const openWOCascadePreview = () => {
+  cascadeDialogVisible.value = true
+}
+
+const confirmTerminate = async () => {
+  await executeAction('TERMINATE')
+  cascadeDialogVisible.value = false
+}
+
+// ===== 表单编辑 =====
+const dialogVisible = ref(false)
+const isEdit = ref(false)
+const formData = ref({
+  orderNo: '', processId: null, userId: null, isCritical: false,
+  plannedQuantity: null, actualQuantity: 0, scrapQuantity: 0,
+  startTime: '', endTime: '', remark: ''
+})
+
+const getEditableFields = (status) => {
+  if (status === STATUS.CREATED) return ['orderNo', 'processId', 'userId', 'isCritical', 'plannedQuantity', 'startTime', 'endTime', 'remark']
+  if (status === STATUS.RELEASED) return ['plannedQuantity', 'startTime', 'endTime', 'remark']
+  if (status === STATUS.RUNNING) return ['actualQuantity', 'scrapQuantity', 'remark']
+  if (status === STATUS.PAUSED) return ['remark']
+  return []
+}
+
+const isFieldEditable = (field) => {
+  if (!isEdit.value) return true
+  return getEditableFields(selectedWorkOrder.value?.status).includes(field)
+}
+
+const openCreateDialog = () => {
+  isEdit.value = false
+  formData.value = {
+    orderNo: '', processId: null, userId: null, isCritical: false,
+    plannedQuantity: null, actualQuantity: 0, scrapQuantity: 0,
+    startTime: '', endTime: '', remark: ''
+  }
+  dialogVisible.value = true
+}
+
+const openEditDialog = () => {
+  if (!selectedWorkOrder.value) return
+  isEdit.value = true
+  formData.value = { ...selectedWorkOrder.value }
+  dialogVisible.value = true
+}
+
+const handleFormSubmit = async () => {
+  try {
+    if (isEdit.value) {
+      const result = await updateWorkOrderApi(selectedWorkOrder.value.workOrderNo, formData.value)
+      if (result.code === 200) {
+        ElMessage.success('修改成功')
+        workOrderStore.updateWorkOrder({ ...selectedWorkOrder.value, ...formData.value })
+        dialogVisible.value = false
+      } else { ElMessage.error(result.message || '修改失败') }
+    } else {
+      const result = await addWorkOrderApi(formData.value)
+      if (result.code === 200) {
+        ElMessage.success('新增成功')
+        await workOrderStore.loadAllWorkOrders()
+        dialogVisible.value = false
+      } else { ElMessage.error(result.message || '新增失败') }
+    }
+  } catch { ElMessage.error('操作失败') }
+}
+
+const resetForm = () => {}
+
+// 删除
+const handleDelete = async () => {
+  if (!selectedWorkOrder.value || selectedWorkOrder.value.status !== STATUS.CREATED) {
+    ElMessage.warning('仅 CREATED 状态的工单可删除')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`确定删除工单 ${selectedWorkOrder.value.workOrderNo}？`, '确认删除', { type: 'warning' })
+    const result = await deleteWorkOrderApi(selectedWorkOrder.value.workOrderNo)
+    if (result.code === 200) {
+      ElMessage.success('删除成功')
+      workOrderStore.deleteWorkOrders([selectedWorkOrder.value.workOrderNo])
+      selectedWorkOrder.value = null
+    } else { ElMessage.error(result.message || '删除失败') }
+  } catch {}
 }
 
 // ===== 初始化 =====
@@ -347,4 +603,10 @@ onMounted(async () => {
 .critical-tag { font-size: 12px; padding: 2px 8px; background: #fef0f0; border: 1px solid #f56c6c; border-radius: 4px; color: #f56c6c; margin-left: 8px; }
 .detail-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .info-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.report-header { padding: 8px 12px; background: #f5f7fa; border-radius: 4px; font-size: 13px; color: #606266; }
+.report-form h4 { margin: 0 0 12px 0; font-size: 14px; }
+.report-preview { margin-top: 12px; padding: 8px 12px; background: #f5f7fa; border-radius: 4px; font-size: 12px; color: #606266; }
+.current-status-bar { padding: 8px 12px; background: #f5f7fa; border-radius: 4px; margin-bottom: 16px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.locked-field { font-size: 13px; }
+.locked-tag { font-size: 10px; padding: 1px 6px; background: #f4f4f5; border-radius: 3px; color: #909399; margin-left: 8px; }
 </style>
