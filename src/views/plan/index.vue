@@ -369,10 +369,81 @@
         <el-button type="primary" @click="confirmCascadeAction">确认执行</el-button>
       </template>
     </el-dialog>
+
+    <!-- 订单 Drawer（跨模块内联查看） -->
+    <el-drawer
+      v-model="orderDrawerVisible"
+      title=""
+      direction="rtl"
+      size="520px"
+      :close-on-click-modal="true"
+    >
+      <template #header>
+        <div class="drawer-header">
+          <div>
+            <span style="font-weight:600;">📦 订单详情</span>
+            <span style="font-size:12px;color:#909399;margin-left:8px;">{{ drawerOrderData?.orderNo }}</span>
+          </div>
+        </div>
+      </template>
+      <div v-if="drawerOrderData" class="drawer-body">
+        <!-- 订单基本信息 -->
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="订单名称">{{ drawerOrderData.orderName }}</el-descriptions-item>
+          <el-descriptions-item label="产线">{{ drawerOrderData.lineNo }}</el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag :type="getStatusType(drawerOrderData.status)" size="small">
+              {{ STATUS_LABELS[drawerOrderData.status] }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="产量">
+            {{ drawerOrderData.quantityProduced || 0 }}/{{ drawerOrderData.quantity }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <!-- 订单操作按钮 -->
+        <div class="drawer-actions">
+          <!-- 人工可操作区 -->
+          <div class="actions-zone user-zone">
+            <span class="zone-label">人工操作</span>
+            <el-button size="small" type="warning" v-if="drawerOrderData.status === STATUS.RUNNING" @click="drawerOrderAction('PAUSE')">⏸ 暂停</el-button>
+            <el-button size="small" type="success" v-if="drawerOrderData.status === STATUS.PAUSED" @click="drawerOrderAction('RESUME')">▶ 恢复</el-button>
+            <el-button size="small" type="danger" v-if="drawerOrderData.status === STATUS.RELEASED" @click="drawerOrderAction('TERMINATE')">✕ 作废</el-button>
+          </div>
+          <div class="actions-divider"></div>
+          <!-- 系统驱动区（置灰+删除线） -->
+          <div class="actions-zone system-zone">
+            <span class="zone-label">系统驱动</span>
+            <span class="system-btn disabled">发布</span>
+            <span class="system-btn disabled">取消发布</span>
+            <span class="system-btn disabled">开始作业</span>
+            <span class="system-btn disabled">完成作业</span>
+          </div>
+        </div>
+
+        <!-- 关联工单列表 -->
+        <div class="drawer-section">
+          <h4>关联工单 ({{ drawerWorkOrders.length }})</h4>
+          <div v-for="wo in drawerWorkOrders" :key="wo.workOrderNo" class="wo-item">
+            <span>
+              <span v-if="wo.isCritical" style="color:#f56c6c;">⭐ </span>
+              {{ wo.workOrderNo }} · {{ wo.processId }} · {{ wo.userId }}
+            </span>
+            <el-tag :type="getStatusType(wo.status)" size="small">{{ STATUS_LABELS[wo.status] }}</el-tag>
+          </div>
+          <el-empty v-if="drawerWorkOrders.length === 0" description="暂无工单" />
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="orderDrawerVisible = false">关闭</el-button>
+        <el-button type="primary" @click="goToOrderPage">🔗 打开完整页面</el-button>
+      </template>
+    </el-drawer>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { Search, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePlanStore } from '@/stores/plan'
@@ -383,6 +454,7 @@ import {
   executePlanActionApi,
   getOrdersByPlanApi
 } from '@/api/plan'
+import { getOrderByNoApi, getWorkOrdersByOrderApi, executeOrderActionApi } from '@/api/order'
 
 // ===== 状态常量 =====
 const STATUS = {
@@ -795,12 +867,71 @@ const confirmCascadeAction = async () => {
   }
 }
 
-// ===== 跨模块 Drawer（Task 10 详细实现） =====
+// ===== 跨模块订单 Drawer =====
+const router = useRouter()
 const orderDrawerVisible = ref(false)
 const drawerOrderData = ref(null)
 const drawerWorkOrders = ref([])
 
-const openOrderDrawer = (orderNo) => { /* 在 Task 10 实现 */ }
+const openOrderDrawer = async (orderNo) => {
+  try {
+    const [orderResult, woResult] = await Promise.all([
+      getOrderByNoApi(orderNo),
+      getWorkOrdersByOrderApi(orderNo)
+    ])
+    if (orderResult.code === 200) {
+      drawerOrderData.value = orderResult.data
+    }
+    if (woResult.code === 200) {
+      drawerWorkOrders.value = woResult.data
+    }
+    orderDrawerVisible.value = true
+  } catch {
+    ElMessage.error('获取订单详情失败')
+  }
+}
+
+const drawerOrderAction = async (action) => {
+  try {
+    const result = await executeOrderActionApi(drawerOrderData.value.orderNo, action)
+    if (result.code === 200) {
+      ElMessage.success('操作成功')
+      const refresh = await getOrderByNoApi(drawerOrderData.value.orderNo)
+      if (refresh.code === 200) drawerOrderData.value = refresh.data
+    } else {
+      ElMessage.error(result.message || '操作失败')
+    }
+  } catch {
+    ElMessage.error('操作请求失败')
+  }
+}
+
+const goToOrderPage = () => {
+  orderDrawerVisible.value = false
+  router.push('/order')
+}
+
+// ===== 删除计划 =====
+const handleDelete = async () => {
+  if (!selectedPlan.value) return
+  try {
+    await ElMessageBox.confirm(
+      `确定删除计划 ${selectedPlan.value.planNo} 吗？仅 CREATED 状态可删除。`,
+      '确认删除',
+      { confirmButtonText: '确认删除', cancelButtonText: '取消', type: 'warning' }
+    )
+    const result = await deletePlanApi(selectedPlan.value.planNo)
+    if (result.code === 200) {
+      ElMessage.success('删除成功')
+      planStore.deletePlans([selectedPlan.value.planNo])
+      selectedPlan.value = null
+    } else {
+      ElMessage.error(result.message || '删除失败')
+    }
+  } catch {
+    // 取消删除
+  }
+}
 
 // ===== 初始化 =====
 onMounted(async () => {
@@ -847,4 +978,17 @@ onMounted(async () => {
 .current-status-bar { padding: 8px 12px; background: #f5f7fa; border-radius: 4px; margin-bottom: 16px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
 .locked-field { font-size: 13px; }
 .locked-tag { font-size: 10px; padding: 1px 6px; background: #f4f4f5; border-radius: 3px; color: #909399; margin-left: 8px; }
+.drawer-header { display: flex; justify-content: space-between; align-items: center; }
+.drawer-body { padding: 0; }
+.drawer-actions { margin: 16px 0; display: flex; gap: 12px; align-items: flex-start; }
+.actions-zone { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.zone-label { font-size: 11px; color: #909399; margin-right: 4px; font-weight: bold; }
+.actions-divider { width: 1px; background: #dcdfe6; align-self: stretch; }
+.system-btn.disabled {
+  font-size: 11px; padding: 2px 8px; border: 1px solid #dcdfe6; border-radius: 4px;
+  color: #c0c4cc; text-decoration: line-through; cursor: not-allowed; background: #f5f7fa;
+}
+.drawer-section { margin-top: 16px; border-top: 1px solid #ebeef5; padding-top: 12px; }
+.drawer-section h4 { margin: 0 0 8px 0; font-size: 14px; }
+.wo-item { padding: 8px 12px; border-bottom: 1px solid #f5f7fa; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
 </style>
