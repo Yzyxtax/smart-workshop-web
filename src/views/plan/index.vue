@@ -1,933 +1,569 @@
 <template>
-    <div class="page">
-        <h1>生产计划管理</h1>
+  <div class="page">
+    <h1 class="page-title">计划管理</h1>
+  </div>
+  <div class="master-detail-container">
+    <!-- 左侧列表面板 -->
+    <div class="left-panel">
+      <!-- 搜索栏 -->
+      <div class="search-bar">
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索计划编号/名称"
+          clearable
+          @keyup.enter="handleSearch"
+        >
+          <template #append>
+            <el-button @click="handleSearch">
+              <el-icon><Search /></el-icon>
+            </el-button>
+          </template>
+        </el-input>
+      </div>
+
+      <!-- 状态快速筛选 -->
+      <div class="status-filters">
+        <el-button
+          v-for="filter in statusFilters"
+          :key="filter.value"
+          :type="filter.value === activeStatusFilter ? 'primary' : ''"
+          size="small"
+          :plain="filter.value !== activeStatusFilter"
+          @click="activeStatusFilter = filter.value"
+        >
+          {{ filter.label }} ({{ getStatusCount(filter.value) }})
+        </el-button>
+      </div>
+
+      <!-- 可展开的更多筛选 -->
+      <el-collapse v-model="advancedFilterExpanded">
+        <el-collapse-item title="更多筛选" name="1">
+          <el-select v-model="priorityFilter" placeholder="全部优先级" size="small" clearable>
+            <el-option label="高" value="高" />
+            <el-option label="中" value="中" />
+            <el-option label="低" value="低" />
+          </el-select>
+        </el-collapse-item>
+      </el-collapse>
+
+      <!-- 计划列表 -->
+      <div class="list-items">
+        <div
+          v-for="plan in filteredPlanList"
+          :key="plan.planNo"
+          class="list-item"
+          :class="{ active: selectedPlan?.planNo === plan.planNo }"
+          @click="selectPlan(plan)"
+        >
+          <div class="list-item-top">
+            <span class="list-item-no">{{ plan.planNo }}</span>
+            <el-tag :type="getStatusType(plan.status)" size="small">
+              {{ STATUS_LABELS[plan.status] }}
+            </el-tag>
+          </div>
+          <div class="list-item-name">{{ plan.planName }}</div>
+          <div class="list-item-meta">
+            数量: {{ plan.completedNum || 0 }}/{{ plan.planNum }}
+            · {{ plan.priority || '-' }}
+          </div>
+        </div>
+        <el-empty v-if="filteredPlanList.length === 0" description="暂无计划" />
+      </div>
+
+      <!-- 底栏：新建按钮 + 分页 -->
+      <div class="panel-footer">
+        <el-button type="primary" @click="openCreateDialog">+ 新建计划</el-button>
+      </div>
     </div>
-    <el-container class="main-container">
-        <el-header class="header">
-            <div class="search-form">
-                <!-- 条件查询输入框区域 -->
-                <div class="form-row">
-                    <el-input v-model="query.planName" placeholder="计划名称" style="width: 200px; margin-right: 15px;" />
-                    <el-input v-model="query.productName" placeholder="产品名称"
-                        style="width: 200px; margin-right: 15px;" />
-                    <el-date-picker v-model="query.dateRange" type="daterange" range-separator="至"
-                        start-placeholder="开始日期" end-placeholder="结束日期" style="width: 240px; margin-right: 15px;" />
-                    <el-button type="primary" icon="Search" @click="handleSearch">查询</el-button>
-                    <el-button icon="Refresh" @click="handleReset">重置</el-button>
-                </div>
-            </div>
-        </el-header>
-        <el-container>
-            <el-aside class="aside" width="250px">
-                <!-- 标题、按钮区域 -->
-                <div class="aside-header">
-                    <h2 class="aside-title">计划列表</h2>
-                    <el-button type="primary" size="small" @click="openAddDialog">新增计划</el-button>
-                </div>
-                <!-- 菜单区域 -->
-                <div class="menu-wrapper">
-                    <el-menu v-model:default-active="activeIndex" class="team-menu" @select="handleSelect">
-                        <el-sub-menu index="1">
-                            <template #title>
-                                <span>创建状态</span>
-                            </template>
-                            <el-menu-item v-for="planItem in plans.created" :key="planItem.planNo"
-                                :index="`CREATED||${planItem.planNo}`" class="team-menu-item">
-                                <span class="team-name">{{ planItem.planName }}</span>
-                                <div class="team-actions">
-                                    <el-button type="text" size="small" icon="Edit"
-                                        @click.stop="openEditDialog(planItem)" />
-                                    <el-button type="text" size="small" icon="Delete"
-                                        @click.stop="deleteTeam(planItem)" />
-                                </div>
-                            </el-menu-item>
-                        </el-sub-menu>
-                        <el-sub-menu index="2">
-                            <template #title>
-                                <span>发布状态</span>
-                            </template>
-                            <el-menu-item v-for="planItem in plans.released" :key="planItem.planNo"
-                                :index="`RELEASED||${planItem.planNo}`" class="team-menu-item">
-                                <span class="team-name">{{ planItem.planName }}</span>
-                                <div class="team-actions">
-                                    <el-button type="text" size="small" icon="Edit"
-                                        @click.stop="openEditDialog(planItem)" />
-                                </div>
-                            </el-menu-item>
-                        </el-sub-menu>
-                        <el-sub-menu index="3">
-                            <template #title>
-                                <span>执行状态</span>
-                            </template>
-                            <el-menu-item v-for="planItem in plans.execute" :key="planItem.planNo"
-                                :index="`RUNNING||${planItem.planNo}`" class="team-menu-item">
-                                <span class="team-name">{{ planItem.planName }}</span>
-                            </el-menu-item>
-                        </el-sub-menu>
-                        <el-sub-menu index="4">
-                            <template #title>
-                                <span>暂停状态</span>
-                            </template>
-                            <el-menu-item v-for="planItem in plans.pause" :key="planItem.planNo"
-                                :index="`PAUSED||${planItem.planNo}`" class="team-menu-item">
-                                <span class="team-name">{{ planItem.planName }}</span>
-                                <div class="team-actions">
-                                    <el-button type="text" size="small" icon="Edit"
-                                        @click.stop="openEditDialog(planItem)" />
-                                </div>
-                            </el-menu-item>
-                        </el-sub-menu>
-                        <el-sub-menu index="5">
-                            <template #title>
-                                <span>完成状态</span>
-                            </template>
-                            <el-menu-item v-for="planItem in plans.completed" :key="planItem.planNo"
-                                :index="`COMPLETED||${planItem.planNo}`" class="team-menu-item">
-                                <span class="team-name">{{ planItem.planName }}</span>
-                            </el-menu-item>
-                        </el-sub-menu>
-                    </el-menu>
-                </div>
-            </el-aside>
-            <el-main class="main">
-                <!-- 计划详情区域 -->
-                <div v-if="selectedPlan" class="plan-detail">
-                    <el-card class="plan-card">
-                        <template #header>
-                            <div class="card-header">
-                                <h3>{{ selectedPlan.planName }}</h3>
-                                <el-tag :type="getStatusTagType(selectedPlan.status)" size="large">
-                                    {{ getStatusLabel(selectedPlan.status) }}
-                                </el-tag>
-                            </div>
-                        </template>
 
-                        <div class="plan-info">
-                            <div class="info-row">
-                                <div class="info-item">
-                                    <label>计划编号：</label>
-                                    <span>{{ selectedPlan.planNo }}</span>
-                                </div>
-                                <div class="info-item">
-                                    <label>产品名称：</label>
-                                    <span>{{ getProductLabel(selectedPlan.bomId) }}</span>
-                                </div>
-                            </div>
+    <!-- 右侧详情面板 -->
+    <div class="right-panel">
+      <div v-if="selectedPlan" class="detail-content">
+        <!-- 详情头部 + 操作按钮 -->
+        <div class="detail-header">
+          <div class="detail-title">
+            <h2>{{ selectedPlan.planName }}</h2>
+            <span class="detail-no">{{ selectedPlan.planNo }}</span>
+          </div>
+          <div class="detail-actions">
+            <!-- 状态操作按钮 — 按设计文档 Section 3.1 规范 -->
+            <el-button
+              v-for="btn in availableButtons"
+              :key="btn.action"
+              :type="btn.type"
+              :disabled="btn.disabled"
+              :style="btn.disabled ? 'opacity:0.4;cursor:not-allowed;' : ''"
+              @click="handleAction(btn.action)"
+            >
+              {{ btn.label }}
+            </el-button>
+            <el-button
+              v-if="canEdit"
+              type="info"
+              plain
+              @click="openEditDialog"
+            >✏️ 编辑</el-button>
+          </div>
+        </div>
 
-                            <div class="info-row">
-                                <div class="info-item">
-                                    <label>计划数量：</label>
-                                    <span>{{ selectedPlan.planNum }}</span>
-                                </div>
-                                <div class="info-item">
-                                    <label>已生产数量：</label>
-                                    <span>{{ selectedPlan.completedNum }}</span>
-                                </div>
-                            </div>
+        <!-- 状态提示条 -->
+        <el-alert
+          :title="statusHint.text"
+          :type="statusHint.type"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px;"
+        />
 
-                            <div class="info-row">
-                                <div class="info-item">
-                                    <label>计划开始时间：</label>
-                                    <span>{{ selectedPlan.startTime }}</span>
-                                </div>
-                                <div class="info-item">
-                                    <label>计划结束时间：</label>
-                                    <span>{{ selectedPlan.endTime }}</span>
-                                </div>
-                            </div>
+        <!-- 状态流转步骤条 -->
+        <div class="lifecycle-steps">
+          <el-steps :active="currentStepIndex" finish-status="success" align-center>
+            <el-step
+              v-for="step in lifecycleSteps"
+              :key="step.status"
+              :title="step.label"
+              :status="step.stepStatus"
+            />
+          </el-steps>
+        </div>
 
-                            <div class="info-row">
-                                <div class="info-item">
-                                    <label>优先级：</label>
-                                    <span>{{ selectedPlan.priority }}</span>
-                                </div>
-                                <div class="info-item">
-                                    <label>备注：</label>
-                                    <span v-if="selectedPlan.remark">{{ selectedPlan.remark }}</span>
-                                    <span v-else>无</span>
-                                </div>
-                            </div>
+        <!-- 信息卡片区域 -->
+        <div class="info-cards">
+          <el-card class="info-card">
+            <template #header>基本信息</template>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="计划编号">{{ selectedPlan.planNo }}</el-descriptions-item>
+              <el-descriptions-item label="计划名称">{{ selectedPlan.planName }}</el-descriptions-item>
+              <el-descriptions-item label="BOM ID">{{ selectedPlan.bomId }}</el-descriptions-item>
+              <el-descriptions-item label="优先级">
+                <el-tag :type="priorityTagType(selectedPlan.priority)" size="small">
+                  {{ selectedPlan.priority }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="计划数量">{{ selectedPlan.planNum }}</el-descriptions-item>
+              <el-descriptions-item label="已完成数量">{{ selectedPlan.completedNum }}</el-descriptions-item>
+              <el-descriptions-item label="备注" :span="2">{{ selectedPlan.remark || '-' }}</el-descriptions-item>
+            </el-descriptions>
+          </el-card>
+          <el-card class="info-card">
+            <template #header>时间信息</template>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="计划开始">{{ selectedPlan.startTime }}</el-descriptions-item>
+              <el-descriptions-item label="计划结束">{{ selectedPlan.endTime }}</el-descriptions-item>
+              <el-descriptions-item label="创建时间">{{ selectedPlan.createTime }}</el-descriptions-item>
+              <el-descriptions-item label="更新时间">{{ selectedPlan.updateTime }}</el-descriptions-item>
+            </el-descriptions>
+          </el-card>
+        </div>
 
-                            <div class="info-row">
-                                <div class="info-item">
-                                    <label>创建者：</label>
-                                    <span>{{ creatorName || '--' }}</span>
-                                </div>
-                                <div class="info-item">
-                                    <label>发布者：</label>
-                                    <span>{{ publisherName || '--' }}</span>
-                                </div>
-                            </div>
-
-                            <div class="info-row">
-                                <div class="info-item">
-                                    <label>创建时间：</label>
-                                    <span>{{ selectedPlan.createTime }}</span>
-                                </div>
-                                <div class="info-item">
-                                    <label>更新时间：</label>
-                                    <span>{{ selectedPlan.updateTime }}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 操作按钮 -->
-                        <div class="plan-actions">
-                            <el-button type="primary" @click="handlePublishPlan"
-                                v-if="selectedPlan.status === 'CREATED'">
-                                发布计划
-                            </el-button>
-                            <el-button type="primary" @click="handleCancelPlan"
-                                v-if="selectedPlan.status === 'RELEASED'">
-                                取消发布
-                            </el-button>
-                            <el-button type="warning" @click="handlePausePlan" v-if="selectedPlan.status === 'RUNNING'">
-                                暂停执行
-                            </el-button>
-                            <el-button type="primary" @click="handleResumePlan" v-if="selectedPlan.status === 'PAUSED'">
-                                恢复执行
-                            </el-button>
-                        </div>
-                    </el-card>
-
-                    <!-- 相关订单信息（可选，如果需要展示） -->
-                    <!-- <el-card class="orders-card" v-if="selectedPlanOrders.length > 0">
-                        <template #header>
-                            <h4>关联生产订单</h4>
-                        </template>
-                        <el-table :data="selectedPlanOrders" style="width: 100%">
-                            <el-table-column prop="orderNo" label="订单编号" />
-                            <el-table-column prop="orderName" label="订单名称" />
-                            <el-table-column prop="orderNum" label="订单数量" />
-                            <el-table-column prop="status" label="状态" />
-                            <el-table-column prop="createTime" label="创建时间" />
-                        </el-table>
-                    </el-card> -->
-                </div>
-
-                <div v-else class="empty-state">
-                    <el-empty description="请选择一个计划查看详情" />
-                </div>
-            </el-main>
-        </el-container>
-    </el-container>
-    <!-- 新增/修改计划对话框 -->
-    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑计划' : '新增计划'" width="600px" @close="handleCancel">
-        <el-form :rules="rules" ref="planFormRef" :model="formData" label-width="120px">
-            <el-form-item label="计划编号" prop="planNo">
-                <el-input v-model="formData.planNo" placeholder="请输入计划编号"
-                    :disabled="isEdit && !isEditable('planNo', formData.status)" />
-            </el-form-item>
-            <el-form-item label="计划名称" prop="planName">
-                <el-input v-model="formData.planName" placeholder="请输入计划名称"
-                    :disabled="isEdit && !isEditable('planName', formData.status)" />
-            </el-form-item>
-            <el-form-item label="产品" prop="bomId">
-                <el-select v-model="formData.bomId" placeholder="请选择产品" style="width: 100%"
-                    :disabled="isEdit && !isEditable('bomId', formData.status)">
-                    <el-option v-for="item in bomStore.productList" :key="item.id" :label="item.name"
-                        :value="item.id" />
-                </el-select>
-            </el-form-item>
-            <el-form-item label="计划数量" prop="planNum">
-                <el-input-number v-model="formData.planNum" :min="1" placeholder="请输入计划数量" style="width: 100%"
-                    :disabled="isEdit && !isEditable('planNum', formData.status)" />
-            </el-form-item>
-            <el-form-item label="开始时间" prop="startTime">
-                <el-date-picker v-model="formData.startTime" type="date" placeholder="请选择开始时间" format="YYYY-MM-DD"
-                    value-format="YYYY-MM-DD" style="width: 100%"
-                    :disabled="isEdit && !isEditable('startTime', formData.status)" />
-            </el-form-item>
-            <el-form-item label="结束时间" prop="endTime">
-                <el-date-picker v-model="formData.endTime" type="date" placeholder="请选择结束时间" format="YYYY-MM-DD"
-                    value-format="YYYY-MM-DD" style="width: 100%"
-                    :disabled="isEdit && !isEditable('endTime', formData.status)" />
-            </el-form-item>
-            <el-form-item label="优先级" prop="priority">
-                <el-select v-model="formData.priority" placeholder="请选择优先级" style="width: 100%"
-                    :disabled="isEdit && !isEditable('priority', formData.status)">
-                    <el-option label="强" value="强" />
-                    <el-option label="中" value="中" />
-                    <el-option label="弱" value="弱" />
-                </el-select>
-            </el-form-item>
-            <el-form-item label="备注" prop="remark">
-                <el-input type="textarea" v-model="formData.remark" :rows="3" placeholder="请输入备注"
-                    :disabled="isEdit && !isEditable('remark', formData.status)" />
-            </el-form-item>
-        </el-form>
-
-        <template #footer>
-            <el-button @click="handleCancel">取消</el-button>
-            <el-button type="primary" @click="submitForm" :loading="submitLoading">提交</el-button>
-        </template>
-    </el-dialog>
+        <!-- 关联数据 Tab -->
+        <el-tabs v-model="activeTab">
+          <el-tab-pane label="关联订单" name="orders">
+            <el-table :data="relatedOrders" size="small" style="width:100%">
+              <el-table-column prop="orderNo" label="订单编号" width="240" />
+              <el-table-column prop="orderName" label="订单名称" />
+              <el-table-column prop="lineNo" label="产线" width="100" />
+              <el-table-column label="状态" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="getStatusType(row.status)" size="small">
+                    {{ STATUS_LABELS[row.status] }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="产量" width="120">
+                <template #default="{ row }">
+                  {{ row.quantityProduced || 0 }}/{{ row.quantity }}
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="120">
+                <template #default="{ row }">
+                  <el-button type="primary" link size="small" @click="openOrderDrawer(row.orderNo)">
+                    查看详情
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-tab-pane>
+          <el-tab-pane label="操作日志" name="logs">
+            <el-empty description="操作日志（后续迭代）" />
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+      <el-empty v-else description="请选择左侧计划查看详情" />
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watchEffect } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAllPlanApi, deletePlanApi, updatePlanApi, addPlanApi, updatePlanStateApi } from '@/api/plan'
-import { useBomStore } from '@/stores/bom'
-import { queryInfoApi } from '@/api/emp'
+import { usePlanStore } from '@/stores/plan'
+import {
+  addPlanApi,
+  updatePlanApi,
+  deletePlanApi,
+  executePlanActionApi,
+  getOrdersByPlanApi
+} from '@/api/plan'
 
-//#region 元数据
-// 获取状态标签类型
-const getStatusTagType = (status) => {
-    switch (status) {
-        case 'CREATED':
-            return 'info'
-        case 'RELEASED':
-            return 'primary'
-        case 'RUNNING':
-            return 'success'
-        case 'PAUSED':
-            return 'warning'
-        case 'COMPLETED':
-            return 'danger'
-        default:
-            return 'info'
-    }
+// ===== 状态常量 =====
+const STATUS = {
+  CREATED: 'CREATED',
+  RELEASED: 'RELEASED',
+  RUNNING: 'RUNNING',
+  PAUSED: 'PAUSED',
+  COMPLETED: 'COMPLETED',
+  TERMINATED: 'TERMINATED'
 }
 
-// 获取状态标签显示文本
-const getStatusLabel = (status) => {
-    switch (status) {
-        case 'CREATED':
-            return '创建'
-        case 'RELEASED':
-            return '发布'
-        case 'RUNNING':
-            return '执行'
-        case 'PAUSED':
-            return '暂停'
-        case 'COMPLETED':
-            return '完成'
-        default:
-            return status
-    }
+const STATUS_LABELS = {
+  CREATED: '已创建',
+  RELEASED: '已发布',
+  RUNNING: '执行中',
+  PAUSED: '已暂停',
+  COMPLETED: '已完成',
+  TERMINATED: '已作废'
 }
 
-//动作
-const actions = [
-    { name: '发布计划', value: 'PUBLISH' },
-    { name: '取消发布', value: 'CANCEL_PUBLISH' },
-    { name: '暂停执行', value: 'PAUSE' },
-    { name: '恢复执行', value: 'RESUME' },
+const STATUS_TYPE_MAP = {
+  CREATED: 'info',
+  RELEASED: 'info',
+  RUNNING: 'success',
+  PAUSED: 'warning',
+  COMPLETED: 'success',
+  TERMINATED: 'danger'
+}
+
+const getStatusType = (status) => STATUS_TYPE_MAP[status] || 'info'
+
+const priorityTagType = (priority) => {
+  if (priority === '高') return 'danger'
+  if (priority === '中') return 'warning'
+  return 'info'
+}
+
+// ===== Store =====
+const planStore = usePlanStore()
+
+// ===== 左侧面板状态 =====
+const searchKeyword = ref('')
+const activeStatusFilter = ref('ALL')
+const advancedFilterExpanded = ref([])
+const priorityFilter = ref('')
+
+const statusFilters = [
+  { label: '全部', value: 'ALL' },
+  { label: 'RUNNING', value: 'RUNNING' },
+  { label: 'PAUSED', value: 'PAUSED' },
+  { label: 'CREATED', value: 'CREATED' },
+  { label: '终态', value: 'TERMINAL' }
 ]
 
-//#endregion
+const getStatusCount = (statusValue) => {
+  if (statusValue === 'ALL') return planStore.planList.length
+  if (statusValue === 'TERMINAL') {
+    return planStore.planList.filter(
+      p => p.status === STATUS.COMPLETED || p.status === STATUS.TERMINATED
+    ).length
+  }
+  return planStore.planList.filter(p => p.status === statusValue).length
+}
 
-const bomStore = useBomStore()
-const { loadBomData } = bomStore
-
-//#region 条件查询计划列表
-const query = ref({
-    planName: '',
-    productName: '',
-    dateRange: []
+const filteredPlanList = computed(() => {
+  let list = planStore.planList
+  // 关键字搜索
+  if (searchKeyword.value) {
+    const kw = searchKeyword.value.toLowerCase()
+    list = list.filter(
+      p =>
+        p.planNo.toLowerCase().includes(kw) ||
+        p.planName.toLowerCase().includes(kw)
+    )
+  }
+  // 状态筛选
+  if (activeStatusFilter.value === 'TERMINAL') {
+    list = list.filter(
+      p => p.status === STATUS.COMPLETED || p.status === STATUS.TERMINATED
+    )
+  } else if (activeStatusFilter.value !== 'ALL') {
+    list = list.filter(p => p.status === activeStatusFilter.value)
+  }
+  // 优先级筛选
+  if (priorityFilter.value) {
+    list = list.filter(p => p.priority === priorityFilter.value)
+  }
+  return list
 })
 
-//条件过滤以及分类后的计划列表，也是显示用的列表
-const plans = ref({
-    created: [],
-    released: [],
-    execute: [],
-    pause: [],
-    completed: []
-})
+const handleSearch = () => { /* computed 已自动过滤 */ }
 
-//原始计划列表数据
-const planData = ref([])
-
-//将原始计划列表转化成最终展示用的计划列表
-const transformPlans = () => {
-    // 先根据查询条件过滤数据
-    let filteredData = planData.value
-
-    // 按计划名称过滤
-    if (query.value.planName) {
-        filteredData = filteredData.filter(plan =>
-            plan.planName.toLowerCase().includes(query.value.planName.toLowerCase())
-        )
-    }
-
-    // 按产品名称过滤
-    if (query.value.productName) {
-        filteredData = filteredData.filter(plan => {
-            const bomItem = bomStore.getBomById(plan.bomId)
-            const productName = bomItem?.label
-            return productName && productName.toLowerCase().includes(query.value.productName.toLowerCase())
-        })
-    }
-
-    // 按日期范围过滤
-    if (query.value.dateRange && query.value.dateRange.length === 2) {
-        const [startDate, endDate] = query.value.dateRange
-        filteredData = filteredData.filter(plan => {
-            const planDate = new Date(plan.createTime)
-            return planDate >= new Date(startDate) && planDate <= new Date(endDate)
-        })
-    }
-
-    // 按状态分类
-    plans.value.created = filteredData.filter(plan => plan.status === 'CREATED')
-    plans.value.released = filteredData.filter(plan => plan.status === 'RELEASED')
-    plans.value.execute = filteredData.filter(plan => plan.status === 'RUNNING')
-    plans.value.pause = filteredData.filter(plan => plan.status === 'PAUSED')
-    plans.value.completed = filteredData.filter(plan => plan.status === 'COMPLETED')
-}
-
-//加载所有计划
-const loadPlans = async () => {
-    const response = await getAllPlanApi()
-    if (response && response.code === 200) {
-        planData.value = response.data
-        transformPlans()
-    } else {
-        ElMessage.error('加载计划失败')
-    }
-}
-
-//组件加载完毕就数据加载
-onMounted(async () => {
-    await loadBomData()
-    loadPlans()
-})
-
-// 查询方法
-const handleSearch = () => {
-    transformPlans()
-}
-
-// 重置方法
-const handleReset = () => {
-    query.value = {
-        planName: '',
-        productName: '',
-        dateRange: []
-    }
-    transformPlans()
-}
-//#endregion
-
-//#region 计划详情
-//当前选中的计划编号
-const activeIndex = ref(null)
-
-//当前选中的计划
+// ===== 右侧面板状态 =====
 const selectedPlan = ref(null)
+const activeTab = ref('orders')
+const relatedOrders = ref([])
 
-//当前选中的计划的订单信息（如果需要展示）
-const selectedPlanOrders = ref([])
-
-//选中计划
-const handleSelect = (index) => {
-    // index 是状态-计划编号的组合格式（如 "CREATED||PLAN-01", "RELEASED||PLAN-02"）
-    const [status, planNo] = index.split('||');
-    activeIndex.value = index;
-    loadPlanDetails(planNo); // 只传入计划编号
+const selectPlan = async (plan) => {
+  selectedPlan.value = plan
+  activeTab.value = 'orders'
+  // 加载关联订单
+  try {
+    const result = await getOrdersByPlanApi(plan.planNo)
+    if (result.code === 200) {
+      relatedOrders.value = result.data
+    }
+  } catch {
+    relatedOrders.value = []
+  }
 }
 
-// 加载计划详情方法
-const loadPlanDetails = async (planNo) => {
-    const allPlans = [...planData.value]
-    const plan = allPlans.find(p => p.planNo === planNo)
-    if (plan) {
-        selectedPlan.value = plan
-        // 这里可以加载关联的订单信息
-        // loadPlanOrders(planNo)
-    }
-}
+// ===== 状态驱动按钮 =====
+const availableButtons = computed(() => {
+  const status = selectedPlan.value?.status
+  if (!status) return []
 
-// 获取产品名称
-const getProductLabel = (bomId) => {
-    const bomItem = bomStore.getBomById(bomId)
-    return bomItem?.label || '未知产品'
-}
+  const buttonDefs = {
+    PUBLISH:       { action: 'PUBLISH', label: '📋 发布', type: 'primary' },
+    CANCEL_PUBLISH:{ action: 'CANCEL_PUBLISH', label: '↩ 取消发布', type: 'warning' },
+    PAUSE:         { action: 'PAUSE', label: '⏸ 暂停', type: 'warning' },
+    RESUME:        { action: 'RESUME', label: '▶ 恢复', type: 'success' },
+    TERMINATE:     { action: 'TERMINATE', label: '✕ 作废', type: 'danger' }
+  }
 
-const creatorName = ref('')
-const publisherName = ref('')
+  const allowed = {
+    CREATED:    ['PUBLISH'],
+    RELEASED:   ['CANCEL_PUBLISH', 'TERMINATE'],
+    RUNNING:    ['PAUSE'],
+    PAUSED:     ['RESUME'],
+    COMPLETED:  [],
+    TERMINATED: []
+  }
 
-// 获取用户名称
-const getUserLabel = async (userId) => {
-    let userName = '未知用户'
-    try {
-        const response = await queryInfoApi(userId)
-        if (response && response.code === 200) {
-            userName = response.data.name
-        } else {
-            ElMessage.error('加载用户信息失败:' + (response?.message || '未知错误'))
-        }
-    } catch (error) {
-        ElMessage.error('加载用户信息失败:' + error.message)
-    }
-    return userName
-}
-
-// 自动响应 selectedPlan 的变化
-watchEffect(async () => {
-    if (selectedPlan.value?.creatorId) {
-        creatorName.value = await getUserLabel(selectedPlan.value.creatorId)
-    }
-
-    if (selectedPlan.value?.publisherId) {
-        publisherName.value = await getUserLabel(selectedPlan.value.publisherId)
-    }
+  const allowedActions = allowed[status] || []
+  return allowedActions.map(a => ({
+    ...buttonDefs[a],
+    disabled: false
+  }))
 })
-//#endregion
 
-//#region 对计划的增删改
+const canEdit = computed(() => {
+  const status = selectedPlan.value?.status
+  return status === STATUS.CREATED || status === STATUS.RELEASED
+})
+
+const statusHint = computed(() => {
+  const status = selectedPlan.value?.status
+  if (!status) return { text: '', type: 'info' }
+  const hints = {
+    CREATED:    { text: '📝 草稿状态 — 可编辑全部字段，点击"发布"后下发订单', type: 'info' },
+    RELEASED:   { text: '📋 已发布 — 仅可修改数量/时间/优先级/备注。可取消发布或作废', type: 'info' },
+    RUNNING:    { text: '🏭 执行中 — 状态由订单联动驱动，不可编辑。可暂停计划', type: 'success' },
+    PAUSED:     { text: '⏸ 已暂停 — 状态由订单联动驱动。可恢复执行', type: 'warning' },
+    COMPLETED:  { text: '✅ 已完成 — 终态，全部操作禁用。数据仅可查看', type: 'success' },
+    TERMINATED: { text: '✕ 已作废 — 终态，全部操作禁用。数据仅可查看', type: 'danger' }
+  }
+  return hints[status] || { text: '', type: 'info' }
+})
+
+// ===== 生命周期步骤条（主流程） =====
+const mainSteps = [
+  { status: STATUS.CREATED, label: '已创建' },
+  { status: STATUS.RELEASED, label: '已发布' },
+  { status: STATUS.RUNNING, label: '执行中' },
+  { status: STATUS.COMPLETED, label: '已完成' }
+]
+
+const lifecycleSteps = computed(() => {
+  const currentStatus = selectedPlan.value?.status
+  return mainSteps.map(step => ({
+    ...step,
+    stepStatus: getStepStatus(step.status, currentStatus)
+  }))
+})
+
+const currentStepIndex = computed(() => {
+  const s = selectedPlan.value?.status
+  if (s === STATUS.CREATED) return 0
+  if (s === STATUS.RELEASED) return 1
+  if (s === STATUS.RUNNING || s === STATUS.PAUSED) return 2
+  if (s === STATUS.COMPLETED) return 3
+  return 3
+})
+
+const getStepStatus = (stepStatus, currentStatus) => {
+  const order = [STATUS.CREATED, STATUS.RELEASED, STATUS.RUNNING, STATUS.PAUSED, STATUS.COMPLETED, STATUS.TERMINATED]
+  const stepIdx = order.indexOf(stepStatus)
+  const curIdx = order.indexOf(currentStatus)
+  if (stepIdx < curIdx || (stepStatus === STATUS.COMPLETED && currentStatus === STATUS.COMPLETED)) return 'success'
+  if (stepIdx === curIdx) return 'process'
+  return 'wait'
+}
+
+// ===== 新建/编辑对话框 =====
 const dialogVisible = ref(false)
 const isEdit = ref(false)
-const planFormRef = ref(null)
+const editingPlanNo = ref('')
+
+// 表单数据
 const formData = ref({
-    planNo: '',
-    planName: '',
-    bomId: '',
-    planNum: 1,
-    startTime: '',
-    endTime: '',
-    priority: '弱',
-    remark: '',
-    creatorId: JSON.parse(localStorage.getItem('user')).id,
-    status: 'CREATED'  // 修改默认状态为英文枚举值
+  planNo: '',
+  planName: '',
+  bomId: null,
+  planNum: null,
+  startTime: '',
+  endTime: '',
+  priority: '',
+  remark: ''
 })
-const rules = ref({
-    planNo: [
-        { required: true, message: '请输入计划编号', trigger: 'blur' },
-        { min: 2, max: 20, message: '长度在 2 到 20 个字符', trigger: 'blur' }
-    ],
-    planName: [
-        { required: true, message: '请输入计划名称', trigger: 'blur' },
-        { min: 2, max: 20, message: '长度在 2 到 20 个字符', trigger: 'blur' }
-    ],
-    bomId: [
-        { required: true, message: '请选择产品', trigger: 'change' }
-    ],
-    planNum: [
-        { required: true, message: '请输入计划数量', trigger: 'blur' },
-        {
-            validator: (rule, value, callback) => {
-                const num = Number(value);
-                if (!value && value !== 0) {
-                    callback(new Error('计划数量不能为空'));
-                } else if (isNaN(num)) {
-                    callback(new Error('请输入有效数字'));
-                } else if (!Number.isInteger(num)) {
-                    callback(new Error('必须为整数'));
-                } else if (num < 1) {
-                    callback(new Error('计划数量不能小于1'));
-                } else {
-                    callback();
-                }
-            },
-            trigger: 'blur'
-        }
-    ],
-    startTime: [
-        { required: true, message: '请选择计划开始时间', trigger: 'change' }
-    ],
-    endTime: [
-        { required: true, message: '请选择计划结束时间', trigger: 'change' }
-    ],
+
+const getEditableFields = (status) => {
+  if (status === STATUS.CREATED) return ['planNo', 'planName', 'bomId', 'planNum', 'startTime', 'endTime', 'priority', 'remark']
+  if (status === STATUS.RELEASED) return ['planNum', 'startTime', 'endTime', 'priority', 'remark']
+  return []
+}
+
+const openCreateDialog = () => {
+  isEdit.value = false
+  editingPlanNo.value = ''
+  formData.value = {
+    planNo: '', planName: '', bomId: null, planNum: null,
+    startTime: '', endTime: '', priority: '', remark: ''
+  }
+  dialogVisible.value = true
+}
+
+const openEditDialog = () => {
+  if (!selectedPlan.value) return
+  isEdit.value = true
+  editingPlanNo.value = selectedPlan.value.planNo
+  formData.value = { ...selectedPlan.value }
+  dialogVisible.value = true
+}
+
+const handleFormSubmit = async () => {
+  try {
+    if (isEdit.value) {
+      const result = await updatePlanApi(editingPlanNo.value, formData.value)
+      if (result.code === 200) {
+        ElMessage.success('修改成功')
+        planStore.updatePlan({ ...formData.value, planNo: editingPlanNo.value })
+        selectedPlan.value = planStore.planList.find(p => p.planNo === editingPlanNo.value)
+        dialogVisible.value = false
+      } else {
+        ElMessage.error(result.message || '修改失败')
+      }
+    } else {
+      const result = await addPlanApi(formData.value)
+      if (result.code === 200) {
+        ElMessage.success('新增成功')
+        await planStore.loadAllPlans()
+        dialogVisible.value = false
+      } else {
+        ElMessage.error(result.message || '新增失败')
+      }
+    }
+  } catch {
+    ElMessage.error('操作失败')
+  }
+}
+
+// ===== 状态动作处理 =====
+const handleAction = (action) => {
+  if (action === 'TERMINATE' || action === 'PAUSE' || action === 'RESUME' || action === 'CANCEL_PUBLISH') {
+    openCascadePreview(action)
+  } else if (action === 'PUBLISH') {
+    openGateCheck()
+  }
+}
+
+// 门禁检查面板（Task 8 详细实现）
+const gateDialogVisible = ref(false)
+const gateChecks = ref([])
+
+const openGateCheck = () => { gateDialogVisible.value = true }
+
+// 级联预览弹窗（Task 8 详细实现）
+const cascadeDialogVisible = ref(false)
+const pendingAction = ref('')
+const cascadeImpactData = ref([])
+
+const openCascadePreview = (action) => {
+  pendingAction.value = action
+  const actionLabel = { PAUSE: '暂停', RESUME: '恢复', TERMINATE: '作废', CANCEL_PUBLISH: '取消发布' }[action]
+  cascadeImpactData.value = [
+    {
+      level: '本计划',
+      entity: selectedPlan.value.planNo,
+      currentStatus: selectedPlan.value.status,
+      targetStatus: action === 'CANCEL_PUBLISH' ? 'CREATED'
+        : action === 'PAUSE' ? 'PAUSED'
+        : action === 'RESUME' ? 'RUNNING'
+        : 'TERMINATED',
+      count: 1
+    },
+    { level: '关联订单', entity: '—', currentStatus: '待查询', targetStatus: '联动变化', count: relatedOrders.value.length },
+    { level: '关联工单', entity: '—', currentStatus: '待查询', targetStatus: '联动变化', count: '待确认' }
+  ]
+  cascadeDialogVisible.value = true
+}
+
+const confirmCascadeAction = async () => {
+  try {
+    const result = await executePlanActionApi(selectedPlan.value.planNo, pendingAction.value)
+    if (result.code === 200) {
+      ElMessage.success(result.message || '操作成功')
+      await planStore.loadAllPlans()
+      const refreshed = planStore.planList.find(p => p.planNo === selectedPlan.value.planNo)
+      if (refreshed) selectedPlan.value = refreshed
+      cascadeDialogVisible.value = false
+    } else {
+      ElMessage.error(result.message || '操作失败')
+    }
+  } catch {
+    ElMessage.error('操作失败')
+  }
+}
+
+// ===== 跨模块 Drawer（Task 10 详细实现） =====
+const orderDrawerVisible = ref(false)
+const drawerOrderData = ref(null)
+const drawerWorkOrders = ref([])
+
+const openOrderDrawer = (orderNo) => { /* 在 Task 10 实现 */ }
+
+// ===== 初始化 =====
+onMounted(async () => {
+  await planStore.loadAllPlans()
 })
-const submitLoading = ref(false)
-// 保存原始的计划编号字段
-const primitivePlanNo = ref('')
-
-//修改字段白名单映射
-const PLAN_FIELD_WHITELIST = {
-    'CREATED': ['planNo', 'planName', 'bomId', 'planNum', 'startTime', 'endTime', 'priority', 'remark'],
-    'RELEASED': ['planNo', 'planName', 'startTime', 'endTime', 'priority', 'remark'],
-    'PAUSED': ['remark'],
-    'RUNNING': [],
-    'COMPLETED': []
-}
-// 判断字段是否可编辑
-function isEditable(field, status) {
-    return PLAN_FIELD_WHITELIST[status]?.includes(field);
-}
-
-//取消按钮
-const handleCancel = () => {
-    dialogVisible.value = false
-    // 清空表单数据
-    formData.value = {
-        planNo: '',
-        planName: '',
-        bomId: '',
-        planNum: 1,
-        startTime: '',
-        endTime: '',
-        priority: '弱',
-        remark: '',
-        creatorId: JSON.parse(localStorage.getItem('user')).id,
-        status: 'CREATED'  // 修改默认状态为英文枚举值
-    }
-    // 重置表单验证
-    planFormRef.value.resetFields()
-}
-
-//提交按钮
-const submitForm = async () => {
-    //表单校验
-    planFormRef.value.validate(async (valid) => {
-        if (valid) {
-            submitLoading.value = true
-            if (isEdit.value) {
-                //使用status字段查找允许修改的字段，只将这些字段传给后端
-                const { status, ...remainFields } = formData.value
-                const submitFields = PLAN_FIELD_WHITELIST[status]
-                const payload = submitFields.reduce((acc, field) => {
-                    acc[field] = remainFields[field]
-                    return acc
-                }, {})
-                const result = await updatePlanApi(payload, primitivePlanNo.value)
-                if (result && result.code == 200) {
-                    ElMessage.success('保存成功')
-                    dialogVisible.value = false
-                    await loadPlans()
-                    //跳转到更新的计划详情页面
-                    if (status === 'PAUSED') {
-                        selectedPlan.value = planData.value.find(item => item.planNo === primitivePlanNo.value)
-                        activeIndex.value = status + '||' + primitivePlanNo.value
-                    } else {
-                        selectedPlan.value = planData.value.find(item => item.planNo === payload.planNo)
-                        activeIndex.value = status + '||' + payload.planNo
-                    }
-                } else {
-                    ElMessage.error('保存信息失败:' + (result?.message || '未知错误'))
-                }
-            } else {
-                //剔除掉status字段
-                const { status, ...payload } = formData.value
-                const result = await addPlanApi(payload)
-                if (result.code == 200) {
-                    ElMessage.success('保存成功')
-                    dialogVisible.value = false
-                    loadPlans()
-                } else {
-                    ElMessage.error('保存信息失败:' + (response?.message || '未知错误'))
-                }
-            }
-            submitLoading.value = false
-        } else {
-            // 表单验证失败
-            ElMessage.error('表单数据填写不完整或格式不正确')
-        }
-    })
-}
-
-//添加计划按钮
-const openAddDialog = () => {
-    isEdit.value = false
-    dialogVisible.value = true
-}
-
-// 修改计划按钮
-const openEditDialog = (planItem) => {
-    isEdit.value = true
-    primitivePlanNo.value = planItem.planNo
-    Object.assign(formData.value, {
-        planNo: planItem.planNo,
-        planName: planItem.planName,
-        bomId: planItem.bomId,
-        planNum: planItem.planNum,
-        startTime: planItem.startTime,
-        endTime: planItem.endTime,
-        priority: planItem.priority,
-        remark: planItem.remark,
-        status: planItem.status
-    })
-    dialogVisible.value = true
-}
-
-// 删除计划按钮
-const deleteTeam = (planItem) => {
-    ElMessageBox.confirm('确定要删除计划吗？该操作不可恢复！', '提示', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-    }).then(async () => {
-        const result = await deletePlanApi(planItem.planNo)
-        if (result && result.code === 200) {
-            ElMessage.success('删除成功')
-            loadPlans()
-        } else {
-            ElMessage.error('删除计划失败:' + (result?.message || '未知错误'))
-        }
-    }).catch(() => {
-        ElMessage.info('已取消删除')
-    })
-}
-//#endregion
-
-//#region 更改计划状态
-
-// 统一的跳转与更新逻辑
-const syncUIAfterStateChange = async (planNo, newStatus) => {
-    // 1. 重新拉取后端最新列表数据
-    await loadPlans();
-
-    // 2. 构造新的菜单索引 (例如: RUNNING||PLAN-001)
-    const nextIndex = `${newStatus}||${planNo}`;
-
-    // 3. 调用 handleSelect 触发侧边栏高亮和详情页更新
-    handleSelect(nextIndex);
-};
-
-// 发布计划
-const handlePublishPlan = async () => {
-    const planNo = selectedPlan.value.planNo
-    const result = await updatePlanStateApi(planNo, 'PUBLISH', JSON.parse(localStorage.getItem('user')).id)
-    if (result && result.code === 200) {
-        ElMessage.success('发布成功')
-        await syncUIAfterStateChange(planNo, 'RELEASED');
-    } else {
-        ElMessage.error('发布计划失败:' + (result?.message || '未知错误'))
-    }
-}
-
-// 取消发布计划
-const handleCancelPlan = async () => {
-    const planNo = selectedPlan.value.planNo
-    const result = await updatePlanStateApi(planNo, 'CANCEL_PUBLISH', JSON.parse(localStorage.getItem('user')).id)
-    if (result && result.code === 200) {
-        ElMessage.success('取消发布成功')
-        await syncUIAfterStateChange(planNo, 'CREATED');
-    } else {
-        ElMessage.error('取消发布计划失败:' + (result?.message || '未知错误'))
-    }
-}
-
-// 暂停计划
-const handlePausePlan = async () => {
-    const planNo = selectedPlan.value.planNo
-    const result = await updatePlanStateApi(planNo, 'PAUSE', JSON.parse(localStorage.getItem('user')).id)
-    if (result && result.code === 200) {
-        ElMessage.success('暂停成功')
-        await syncUIAfterStateChange(planNo, 'PAUSED');
-    } else {
-        ElMessage.error('暂停计划失败:' + (result?.message || '未知错误'))
-    }
-}
-
-// 恢复执行计划
-const handleResumePlan = async () => {
-    const planNo = selectedPlan.value.planNo
-    const result = await updatePlanStateApi(planNo, 'RESUME', JSON.parse(localStorage.getItem('user')).id)
-    if (result && result.code === 200) {
-        ElMessage.success('恢复成功')
-        await syncUIAfterStateChange(planNo, 'RUNNING');
-    } else {
-        ElMessage.error('恢复计划失败:' + (result?.message || '未知错误'))
-    }
-}
-//#endregion
 </script>
 
 <style scoped>
-.main-container {
-    min-height: calc(100vh - 120px);
+.page-title { padding: 0; margin: 0 0 16px 0; font-size: 20px; font-weight: 600; }
+.master-detail-container {
+  display: flex; gap: 16px; height: calc(100vh - 180px);
 }
-
-.header {
-    background-color: #fff;
-    border-bottom: 1px solid #e4e7ed;
-    padding: 20px;
-    height: 70px !important;
-    display: flex;
-    align-items: flex-start;
+.left-panel {
+  width: 380px; min-width: 380px; display: flex; flex-direction: column;
+  border: 1px solid #e4e7ed; border-radius: 8px; background: #fff; overflow: hidden;
 }
-
-.search-form {
-    width: 100%;
+.search-bar { padding: 12px; border-bottom: 1px solid #ebeef5; }
+.status-filters { padding: 8px 12px; display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid #ebeef5; }
+.list-items { flex: 1; overflow-y: auto; }
+.list-item {
+  padding: 10px 16px; border-bottom: 1px solid #ebeef5; cursor: pointer; transition: background 0.2s;
 }
-
-.form-row {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.aside {
-    background-color: #f0f2f5;
-    border-right: 1px solid #e4e7ed;
-    padding: 15px;
-    overflow-y: auto;
-}
-
-.main {
-    background-color: #fafafa;
-    padding: 20px;
-    overflow-y: auto;
-}
-
-/* 侧边栏头部样式 */
-.aside-header {
-    padding: 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.aside-title {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #1a3c5a;
-}
-
-/* 菜单包装器 */
-.menu-wrapper {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px 0;
-}
-
-/* 菜单样式 */
-.team-menu {
-    border-right: none;
-}
-
-.team-menu-item {
-    height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px !important;
-    margin: 4px 8px;
-    border-radius: 6px;
-    transition: all 0.3s ease;
-}
-
-.team-menu-item:hover {
-    background-color: rgba(255, 255, 255, 0.3) !important;
-}
-
-.team-menu-item.is-active {
-    background: linear-gradient(90deg, #409eff, #66b1ff) !important;
-    color: white !important;
-}
-
-.team-name {
-    flex: 1;
-    font-size: 14px;
-    font-weight: 500;
-    color: #1a3c5a;
-}
-
-.team-menu-item.is-active .team-name {
-    color: white;
-}
-
-.team-actions {
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    display: flex;
-    gap: 8px;
-}
-
-.team-menu-item:hover .team-actions {
-    opacity: 1;
-}
-
-.team-actions .el-button {
-    padding: 2px 6px;
-    color: #606266;
-}
-
-.team-actions .el-button:hover {
-    color: #409eff;
-}
-
-.team-menu-item.is-active .team-actions .el-button {
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.team-menu-item.is-active .team-actions .el-button:hover {
-    color: white;
-}
-
-/* 计划详情样式 */
-.plan-detail {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-.plan-card {
-    margin-bottom: 20px;
-}
-
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.card-header h3 {
-    margin: 0;
-    font-size: 18px;
-    color: #303133;
-}
-
-.plan-info {
-    margin-top: 20px;
-}
-
-.info-row {
-    display: flex;
-    margin-bottom: 15px;
-    flex-wrap: wrap;
-}
-
-.info-item {
-    flex: 1;
-    min-width: 300px;
-    margin-right: 20px;
-    margin-bottom: 10px;
-}
-
-.info-item:last-child {
-    margin-right: 0;
-}
-
-.info-item label {
-    font-weight: bold;
-    color: #606266;
-    margin-right: 8px;
-}
-
-.info-item span {
-    color: #303133;
-}
-
-.plan-actions {
-    margin-top: 20px;
-    text-align: right;
-}
-
-.orders-card {
-    margin-top: 20px;
-}
-
-.orders-card h4 {
-    margin: 0;
-    font-size: 16px;
-    color: #303133;
-}
-
-.empty-state {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 400px;
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-}
+.list-item:hover { background: #f5f7fa; }
+.list-item.active { background: #ecf5ff; border-left: 3px solid #409eff; }
+.list-item-top { display: flex; justify-content: space-between; align-items: center; }
+.list-item-no { font-weight: 600; font-size: 13px; }
+.list-item-name { font-size: 12px; color: #606266; margin-top: 3px; }
+.list-item-meta { font-size: 11px; color: #909399; margin-top: 2px; }
+.panel-footer { padding: 8px 16px; border-top: 1px solid #e4e7ed; display: flex; justify-content: space-between; }
+.right-panel { flex: 1; border: 1px solid #e4e7ed; border-radius: 8px; background: #fff; overflow-y: auto; padding: 16px; }
+.detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0; }
+.detail-title h2 { margin: 0; font-size: 18px; display: inline; margin-right: 10px; }
+.detail-no { font-size: 12px; color: #909399; }
+.detail-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.info-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.lifecycle-steps { margin: 16px 0; }
 </style>
