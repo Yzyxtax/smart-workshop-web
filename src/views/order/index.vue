@@ -196,10 +196,100 @@
       <el-empty v-else description="请选择左侧订单查看详情" />
     </div>
   </div>
+
+    <!-- 订单级联预览弹窗 -->
+    <el-dialog v-model="cascadeDialogVisible" :title="`${getActionLabel(pendingAction)} — 级联影响预览`" width="520px">
+      <el-alert :title="getCascadeWarning(pendingAction)" type="warning" :closable="false" show-icon style="margin-bottom:12px;" />
+      <el-table :data="cascadeImpactData" size="small">
+        <el-table-column prop="level" label="层级" width="100" />
+        <el-table-column prop="entity" label="实体" />
+        <el-table-column prop="currentStatus" label="当前状态" width="110" />
+        <el-table-column prop="targetStatus" label="目标状态" width="110" />
+        <el-table-column prop="count" label="影响数量" width="80" align="center" />
+      </el-table>
+      <template #footer>
+        <el-button @click="cascadeDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmCascadeAction">确认执行</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 新建/编辑订单对话框 -->
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑订单' : '新建订单'" width="580px" @close="resetForm">
+      <div v-if="isEdit" class="current-status-bar">
+        <span>当前状态:</span>
+        <el-tag :type="getStatusType(selectedOrder?.status)" size="small">{{ STATUS_LABELS[selectedOrder?.status] }}</el-tag>
+      </div>
+      <el-form :model="formData" label-width="120px">
+        <el-form-item label="订单名称">
+          <template v-if="isFieldEditable('orderName')">
+            <el-input v-model="formData.orderName" placeholder="请输入订单名称" />
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.orderName }}</span><span class="locked-tag">🔒 已排产不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="所属计划">
+          <template v-if="isFieldEditable('planNo')">
+            <el-input v-model="formData.planNo" placeholder="计划编号" />
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.planNo }}</span><span class="locked-tag">🔒 已排产不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="产线编号">
+          <template v-if="isFieldEditable('lineNo')">
+            <el-input v-model="formData.lineNo" placeholder="产线编号" />
+          </template>
+          <template v-else>
+            <span class="locked-field">{{ formData.lineNo }}</span><span class="locked-tag">🔒 已排产不可改</span>
+          </template>
+        </el-form-item>
+        <el-form-item label="计划数量">
+          <el-input-number v-model="formData.quantity" :min="1" :disabled="!isFieldEditable('quantity')" />
+        </el-form-item>
+        <el-form-item label="计划开始时间">
+          <el-date-picker v-model="formData.startTime" type="datetime" placeholder="选择开始时间" :disabled="!isFieldEditable('startTime')" value-format="YYYY-MM-DD HH:mm:ss" />
+        </el-form-item>
+        <el-form-item label="计划结束时间">
+          <el-date-picker v-model="formData.endTime" type="datetime" placeholder="选择结束时间" :disabled="!isFieldEditable('endTime')" value-format="YYYY-MM-DD HH:mm:ss" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="formData.remark" type="textarea" :rows="3" :disabled="!isFieldEditable('remark')" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleFormSubmit">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 工单 Drawer -->
+    <el-drawer v-model="workOrderDrawerVisible" title="" direction="rtl" size="520px">
+      <template #header>
+        <div><span style="font-weight:600;">📋 工单详情</span><span style="font-size:12px;color:#909399;margin-left:8px;">{{ drawerWorkOrderData?.workOrderNo }}</span></div>
+      </template>
+      <div v-if="drawerWorkOrderData">
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="工单编号">{{ drawerWorkOrderData.workOrderNo }}</el-descriptions-item>
+          <el-descriptions-item label="工序ID">{{ drawerWorkOrderData.processId }}</el-descriptions-item>
+          <el-descriptions-item label="人员ID">{{ drawerWorkOrderData.userId }}</el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag :type="getStatusType(drawerWorkOrderData.status)" size="small">{{ STATUS_LABELS[drawerWorkOrderData.status] }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="实际产量">{{ drawerWorkOrderData.actualQuantity }}/{{ drawerWorkOrderData.plannedQuantity }}</el-descriptions-item>
+          <el-descriptions-item label="报废">{{ drawerWorkOrderData.scrapQuantity }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="workOrderDrawerVisible = false">关闭</el-button>
+        <el-button type="primary" @click="goToWorkOrderPage">🔗 打开完整页面</el-button>
+      </template>
+    </el-drawer>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useOrderStore } from '@/stores/order'
@@ -210,6 +300,7 @@ import {
   executeOrderActionApi,
   getWorkOrdersByOrderApi
 } from '@/api/order'
+import { getWorkOrderByNoApi } from '@/api/workOrder'
 
 // ===== 状态常量 =====
 const STATUS = {
@@ -362,30 +453,132 @@ const currentStepIndex = computed(() => {
   return 3
 })
 
+// 删除
+const handleDelete = async () => {
+  if (!selectedOrder.value || selectedOrder.value.status !== STATUS.CREATED) {
+    ElMessage.warning('仅 CREATED 状态的订单可删除')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`确定删除订单 ${selectedOrder.value.orderNo}？`, '确认删除', { type: 'warning' })
+    const result = await deleteOrderApi(selectedOrder.value.orderNo)
+    if (result.code === 200) {
+      ElMessage.success('删除成功')
+      orderStore.deleteOrders([selectedOrder.value.orderNo])
+      selectedOrder.value = null
+    } else { ElMessage.error(result.message || '删除失败') }
+  } catch {}
+}
+
 const handleOrderAction = (action) => {
   openOrderCascadePreview(action)
 }
 
-// ===== 级联预览（占位，Task 12 完善） =====
+// ===== 级联预览 =====
 const cascadeDialogVisible = ref(false)
 const pendingAction = ref('')
 const cascadeImpactData = ref([])
-const openOrderCascadePreview = (action) => {
-  ElMessage.info('级联预览功能将在下一步实现')
+
+const getActionLabel = (a) => ({ PAUSE: '暂停订单', RESUME: '恢复订单', TERMINATE: '作废订单' }[a] || a)
+const getCascadeWarning = (a) => {
+  return {
+    PAUSE: '暂停将级联暂停所有关联的 RUNNING 工单。',
+    RESUME: '恢复将级联恢复所有关联的 PAUSED 工单。',
+    TERMINATE: '作废为终态操作，不可逆。将级联作废所有非终态的关联工单。'
+  }[a] || ''
 }
 
-// ===== 表单（占位，Task 12 完善） =====
+const openOrderCascadePreview = (action) => {
+  pendingAction.value = action
+  const order = selectedOrder.value
+  cascadeImpactData.value = [
+    { level: '本订单', entity: order.orderNo, currentStatus: STATUS_LABELS[order.status], targetStatus: STATUS_LABELS[{ PAUSE: 'PAUSED', RESUME: 'RUNNING', TERMINATE: 'TERMINATED' }[action]], count: 1 },
+    { level: '关联工单', entity: `${relatedWorkOrders.value.length} 个工单`, currentStatus: '混合', targetStatus: '联动变化', count: relatedWorkOrders.value.length }
+  ]
+  cascadeDialogVisible.value = true
+}
+
+const confirmCascadeAction = async () => {
+  try {
+    const result = await executeOrderActionApi(selectedOrder.value.orderNo, pendingAction.value)
+    if (result.code === 200) {
+      ElMessage.success(result.message || '操作成功')
+      cascadeDialogVisible.value = false
+      await orderStore.loadAllOrders()
+      const ref = orderStore.orderList.find(o => o.orderNo === selectedOrder.value.orderNo)
+      if (ref) selectedOrder.value = ref
+    } else { ElMessage.error(result.message || '操作失败') }
+  } catch { ElMessage.error('操作请求失败') }
+}
+
+// ===== 表单 =====
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const formData = ref({ orderName: '', planNo: '', lineNo: '', quantity: null, startTime: '', endTime: '', remark: '' })
-const openCreateDialog = () => { dialogVisible.value = true }
-const openEditDialog = () => { if (selectedOrder.value) { isEdit.value = true; formData.value = { ...selectedOrder.value }; dialogVisible.value = true } }
-const handleFormSubmit = async () => { dialogVisible.value = false }
 
-// ===== 工单 Drawer（占位，Task 12 完善） =====
+const getEditableFields = (status) => {
+  if (status === STATUS.CREATED) return ['orderName', 'planNo', 'lineNo', 'quantity', 'startTime', 'endTime', 'remark']
+  if (status === STATUS.RELEASED) return ['quantity', 'startTime', 'endTime', 'remark']
+  if (status === STATUS.PAUSED) return ['remark']
+  return []
+}
+const isFieldEditable = (field) => {
+  if (!isEdit.value) return true
+  return getEditableFields(selectedOrder.value?.status).includes(field)
+}
+
+const openCreateDialog = () => {
+  isEdit.value = false
+  formData.value = { orderName: '', planNo: '', lineNo: '', quantity: null, startTime: '', endTime: '', remark: '' }
+  dialogVisible.value = true
+}
+
+const openEditDialog = () => {
+  if (!selectedOrder.value) return
+  isEdit.value = true
+  formData.value = { ...selectedOrder.value }
+  dialogVisible.value = true
+}
+
+const handleFormSubmit = async () => {
+  try {
+    if (isEdit.value) {
+      const result = await updateOrderApi(selectedOrder.value.orderNo, formData.value)
+      if (result.code === 200) {
+        ElMessage.success('修改成功')
+        orderStore.updateOrder({ ...selectedOrder.value, ...formData.value })
+        dialogVisible.value = false
+      } else { ElMessage.error(result.message || '修改失败') }
+    } else {
+      const result = await addOrderApi(formData.value)
+      if (result.code === 200) {
+        ElMessage.success('新增成功')
+        await orderStore.loadAllOrders()
+        dialogVisible.value = false
+      } else { ElMessage.error(result.message || '新增失败') }
+    }
+  } catch { ElMessage.error('操作失败') }
+}
+
+const resetForm = () => {}
+
+// ===== 工单 Drawer =====
+const router = useRouter()
 const workOrderDrawerVisible = ref(false)
 const drawerWorkOrderData = ref(null)
-const openWorkOrderDrawer = (workOrderNo) => { ElMessage.info('工单详情功能将在下一步实现') }
+
+const openWorkOrderDrawer = async (workOrderNo) => {
+  try {
+    const result = await getWorkOrderByNoApi(workOrderNo)
+    if (result.code === 200) drawerWorkOrderData.value = result.data
+    workOrderDrawerVisible.value = true
+  } catch { ElMessage.error('获取工单详情失败') }
+}
+
+const goToWorkOrderPage = () => {
+  workOrderDrawerVisible.value = false
+  router.push('/workOrder')
+}
 
 // ===== 初始化 =====
 onMounted(async () => {
@@ -420,4 +613,7 @@ onMounted(async () => {
   color: #c0c4cc; text-decoration: line-through; cursor: not-allowed; background: #f5f7fa;
 }
 .info-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.current-status-bar { padding: 8px 12px; background: #f5f7fa; border-radius: 4px; margin-bottom: 16px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.locked-field { font-size: 13px; }
+.locked-tag { font-size: 10px; padding: 1px 6px; background: #f4f4f5; border-radius: 3px; color: #909399; margin-left: 8px; }
 </style>
