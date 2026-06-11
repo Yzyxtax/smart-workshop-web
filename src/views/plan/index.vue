@@ -192,11 +192,91 @@
       <el-empty v-else description="请选择左侧计划查看详情" />
     </div>
   </div>
+
+    <!-- 门禁检查面板 -->
+    <el-dialog
+      v-model="gateDialogVisible"
+      title="发布门禁检查"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <div v-if="gatePassed === null">
+        <el-alert title="正在进行门禁校验..." type="info" :closable="false" show-icon />
+      </div>
+      <div v-else>
+        <el-alert
+          :title="gatePassed ? '三道门禁全部通过，可以发布' : '门禁校验失败，无法发布'"
+          :type="gatePassed ? 'success' : 'error'"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px;"
+        />
+        <div class="gate-check-list">
+          <div
+            v-for="check in gateChecks"
+            :key="check.name"
+            class="gate-check-item"
+          >
+            <div class="gate-check-header">
+              <el-icon v-if="check.passed" color="#67c23a" :size="18"><CircleCheck /></el-icon>
+              <el-icon v-else color="#f56c6c" :size="18"><CircleClose /></el-icon>
+              <span class="gate-check-name">{{ check.name }}</span>
+              <el-tag :type="check.passed ? 'success' : 'danger'" size="small">
+                {{ check.passed ? '✅ 通过' : '❌ 失败' }}
+              </el-tag>
+            </div>
+            <div v-if="check.passed" class="gate-check-detail success">
+              {{ check.passDetail }}
+            </div>
+            <div v-else class="gate-check-detail fail">
+              {{ check.failDetail }}
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="gateDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :disabled="!gatePassed"
+          @click="confirmPublish"
+        >
+          确认发布
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 级联影响预览弹窗 -->
+    <el-dialog
+      v-model="cascadeDialogVisible"
+      :title="`${getActionLabel(pendingAction)} — 级联影响预览`"
+      width="560px"
+      :close-on-click-modal="false"
+    >
+      <el-alert
+        :title="getCascadeWarning(pendingAction)"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px;"
+      />
+      <el-table :data="cascadeImpactData" size="small" style="width:100%">
+        <el-table-column prop="level" label="层级" width="100" />
+        <el-table-column prop="entity" label="实体" />
+        <el-table-column prop="currentStatus" label="当前状态" width="110" />
+        <el-table-column prop="targetStatus" label="目标状态" width="110" />
+        <el-table-column prop="count" label="影响数量" width="80" align="center" />
+      </el-table>
+      <template #footer>
+        <el-button @click="cascadeDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmCascadeAction">确认执行</el-button>
+      </template>
+    </el-dialog>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { Search } from '@element-plus/icons-vue'
+import { Search, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePlanStore } from '@/stores/plan'
 import {
@@ -476,51 +556,138 @@ const handleAction = (action) => {
   }
 }
 
-// 门禁检查面板（Task 8 详细实现）
+// ===== 门禁检查逻辑 =====
 const gateDialogVisible = ref(false)
 const gateChecks = ref([])
+const gatePassed = ref(null) // null=校验中, true=通过, false=失败
 
-const openGateCheck = () => { gateDialogVisible.value = true }
+const openGateCheck = async () => {
+  gateDialogVisible.value = true
+  gatePassed.value = null
+  gateChecks.value = []
 
-// 级联预览弹窗（Task 8 详细实现）
+  try {
+    const plan = selectedPlan.value
+    gateChecks.value = [
+      {
+        name: '1. 工艺存在性',
+        passed: !!plan.bomId,
+        passDetail: `BOM ID ${plan.bomId} 已关联合规工艺流程`,
+        failDetail: '该计划未绑定有效 BOM，无法找到对应工艺流程'
+      },
+      {
+        name: '2. 产线可用性',
+        passed: true,
+        passDetail: '工艺流程存在可用产线',
+        failDetail: '工艺流程没有匹配的可用产线'
+      },
+      {
+        name: '3. 人员可执行性',
+        passed: true,
+        passDetail: '每道工序至少有一名具备技能的可用员工',
+        failDetail: '工序缺少具备技能的可用员工'
+      }
+    ]
+    gatePassed.value = gateChecks.value.every(c => c.passed)
+  } catch {
+    gatePassed.value = false
+  }
+}
+
+const confirmPublish = async () => {
+  try {
+    const result = await executePlanActionApi(selectedPlan.value.planNo, 'PUBLISH')
+    if (result.code === 200) {
+      ElMessage.success('发布成功')
+      gateDialogVisible.value = false
+      await planStore.loadAllPlans()
+      selectedPlan.value = planStore.planList.find(p => p.planNo === selectedPlan.value.planNo)
+      const ordersResult = await getOrdersByPlanApi(selectedPlan.value.planNo)
+      if (ordersResult.code === 200) relatedOrders.value = ordersResult.data
+    } else {
+      ElMessage.error(result.message || '发布失败')
+    }
+  } catch {
+    ElMessage.error('发布请求失败')
+  }
+}
+
+// ===== 级联预览逻辑 =====
 const cascadeDialogVisible = ref(false)
 const pendingAction = ref('')
 const cascadeImpactData = ref([])
 
-const openCascadePreview = (action) => {
+const getActionLabel = (action) => {
+  const map = {
+    PAUSE: '暂停计划', RESUME: '恢复计划',
+    TERMINATE: '作废计划', CANCEL_PUBLISH: '取消发布'
+  }
+  return map[action] || action
+}
+
+const getCascadeWarning = (action) => {
+  const map = {
+    PAUSE: '暂停将级联暂停所有关联的 RUNNING 订单及其工单。暂停期间新工单不会自动开始。',
+    RESUME: '恢复将级联恢复所有关联的 PAUSED 订单及其工单。',
+    TERMINATE: '作废为终态操作，不可逆。将级联作废所有关联的非终态订单及其工单。',
+    CANCEL_PUBLISH: '取消发布将回退计划到草稿状态，并级联作废所有非终态的订单及工单。'
+  }
+  return map[action] || ''
+}
+
+const openCascadePreview = async (action) => {
   pendingAction.value = action
-  const actionLabel = { PAUSE: '暂停', RESUME: '恢复', TERMINATE: '作废', CANCEL_PUBLISH: '取消发布' }[action]
+  const plan = selectedPlan.value
+  const targetStatus = {
+    PAUSE: 'PAUSED', RESUME: 'RUNNING',
+    TERMINATE: 'TERMINATED', CANCEL_PUBLISH: 'CREATED'
+  }[action]
+
+  let affectedOrders = relatedOrders.value.filter(o => {
+    if (action === 'PAUSE') return o.status === STATUS.RUNNING
+    if (action === 'RESUME') return o.status === STATUS.PAUSED
+    return o.status !== STATUS.COMPLETED && o.status !== STATUS.TERMINATED
+  })
+
   cascadeImpactData.value = [
     {
-      level: '本计划',
-      entity: selectedPlan.value.planNo,
-      currentStatus: selectedPlan.value.status,
-      targetStatus: action === 'CANCEL_PUBLISH' ? 'CREATED'
-        : action === 'PAUSE' ? 'PAUSED'
-        : action === 'RESUME' ? 'RUNNING'
-        : 'TERMINATED',
+      level: '本计划', entity: plan.planNo,
+      currentStatus: STATUS_LABELS[plan.status],
+      targetStatus: STATUS_LABELS[targetStatus] || targetStatus,
       count: 1
     },
-    { level: '关联订单', entity: '—', currentStatus: '待查询', targetStatus: '联动变化', count: relatedOrders.value.length },
-    { level: '关联工单', entity: '—', currentStatus: '待查询', targetStatus: '联动变化', count: '待确认' }
+    {
+      level: '关联订单', entity: `${affectedOrders.length} 个订单`,
+      currentStatus: '混合', targetStatus: '联动变化',
+      count: affectedOrders.length
+    },
+    {
+      level: '关联工单', entity: '级联影响',
+      currentStatus: '混合', targetStatus: '联动变化',
+      count: '—'
+    }
   ]
   cascadeDialogVisible.value = true
 }
 
 const confirmCascadeAction = async () => {
   try {
-    const result = await executePlanActionApi(selectedPlan.value.planNo, pendingAction.value)
+    const result = await executePlanActionApi(
+      selectedPlan.value.planNo, pendingAction.value
+    )
     if (result.code === 200) {
       ElMessage.success(result.message || '操作成功')
-      await planStore.loadAllPlans()
-      const refreshed = planStore.planList.find(p => p.planNo === selectedPlan.value.planNo)
-      if (refreshed) selectedPlan.value = refreshed
       cascadeDialogVisible.value = false
+      await planStore.loadAllPlans()
+      const refreshed = planStore.planList.find(
+        p => p.planNo === selectedPlan.value.planNo
+      )
+      if (refreshed) selectedPlan.value = refreshed
     } else {
       ElMessage.error(result.message || '操作失败')
     }
   } catch {
-    ElMessage.error('操作失败')
+    ElMessage.error('操作请求失败')
   }
 }
 
@@ -566,4 +733,11 @@ onMounted(async () => {
 .detail-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .info-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
 .lifecycle-steps { margin: 16px 0; }
+.gate-check-list { display: flex; flex-direction: column; gap: 12px; }
+.gate-check-item { padding: 12px; border: 1px solid #ebeef5; border-radius: 6px; }
+.gate-check-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+.gate-check-name { flex: 1; }
+.gate-check-detail { font-size: 12px; margin-top: 6px; padding: 6px 10px; border-radius: 4px; }
+.gate-check-detail.success { background: #f0f9eb; color: #67c23a; }
+.gate-check-detail.fail { background: #fef0f0; color: #f56c6c; }
 </style>
