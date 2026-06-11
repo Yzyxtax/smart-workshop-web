@@ -10,10 +10,9 @@
           v-model="searchKeyword"
           placeholder="搜索工单编号"
           clearable
-          @keyup.enter="handleSearch"
         >
           <template #append>
-            <el-button @click="handleSearch">
+            <el-button>
               <el-icon><Search /></el-icon>
             </el-button>
           </template>
@@ -163,14 +162,6 @@
         <span>· 当前累计 {{ selectedWorkOrder?.actualQuantity || 0 }}/{{ selectedWorkOrder?.plannedQuantity }}</span>
       </div>
 
-      <el-table :data="reportHistory" size="small" style="margin:12px 0;">
-        <el-table-column prop="time" label="时间" width="140" />
-        <el-table-column prop="quantity" label="本次产量" width="90" align="center" />
-        <el-table-column prop="scrap" label="本次报废" width="90" align="center" />
-        <el-table-column prop="cumulative" label="累计产量" width="90" align="center" />
-      </el-table>
-      <el-empty v-if="reportHistory.length === 0" description="暂无上报记录" />
-
       <el-divider />
       <div class="report-form">
         <h4>📝 本次上报</h4>
@@ -202,7 +193,7 @@
     </el-dialog>
 
     <!-- 新建/编辑工单对话框 -->
-    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑工单' : '新建工单'" width="580px" @close="resetForm">
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑工单' : '新建工单'" width="580px">
       <div v-if="isEdit" class="current-status-bar">
         <span>当前状态:</span>
         <el-tag :type="getStatusType(selectedWorkOrder?.status)" size="small">{{ STATUS_LABELS[selectedWorkOrder?.status] }}</el-tag>
@@ -347,8 +338,6 @@ const filteredWorkOrderList = computed(() => {
   return list
 })
 
-const handleSearch = () => {}
-
 // ===== 右侧面板 =====
 const selectedWorkOrder = ref(null)
 
@@ -380,10 +369,9 @@ const availableButtons = computed(() => {
   return (allowed[status] || []).map(a => ({ ...defs[a], disabled: false }))
 })
 
-const canEdit = computed(() => {
-  const s = selectedWorkOrder.value?.status
-  return s === STATUS.CREATED || s === STATUS.RELEASED || s === STATUS.RUNNING || s === STATUS.PAUSED
-})
+const canEdit = computed(() =>
+  [STATUS.CREATED, STATUS.RELEASED, STATUS.RUNNING, STATUS.PAUSED].includes(selectedWorkOrder.value?.status)
+)
 
 const statusHint = computed(() => {
   const s = selectedWorkOrder.value?.status
@@ -406,25 +394,25 @@ const mainSteps = [
   { status: STATUS.COMPLETED, label: '已完成' }
 ]
 
-const lifecycleSteps = computed(() => {
-  const cur = selectedWorkOrder.value?.status
-  const order = [STATUS.CREATED, STATUS.RELEASED, STATUS.RUNNING, STATUS.PAUSED, STATUS.COMPLETED, STATUS.TERMINATED]
-  const curIdx = order.indexOf(cur)
-  return mainSteps.map((step) => {
-    const si = order.indexOf(step.status)
-    let ss = 'wait'
-    if (si < curIdx) ss = 'success'
-    else if (si === curIdx) ss = 'process'
-    return { ...step, stepStatus: ss }
-  })
-})
+const STEP_INDEX = {
+  [STATUS.CREATED]: 0,
+  [STATUS.RELEASED]: 1,
+  [STATUS.RUNNING]: 2,
+  [STATUS.PAUSED]: 2,
+  [STATUS.COMPLETED]: 3,
+  [STATUS.TERMINATED]: 3
+}
 
-const currentStepIndex = computed(() => {
-  const s = selectedWorkOrder.value?.status
-  if (s === STATUS.CREATED) return 0
-  if (s === STATUS.RELEASED) return 1
-  if (s === STATUS.RUNNING || s === STATUS.PAUSED) return 2
-  return 3
+const currentStepIndex = computed(() =>
+  STEP_INDEX[selectedWorkOrder.value?.status] ?? 0
+)
+
+const lifecycleSteps = computed(() => {
+  const curIdx = currentStepIndex.value
+  return mainSteps.map((step, i) => ({
+    ...step,
+    stepStatus: i < curIdx ? 'success' : i === curIdx ? 'process' : 'wait'
+  }))
 })
 
 const handleWorkOrderAction = (action) => {
@@ -448,7 +436,6 @@ const executeAction = async (action) => {
 
 // ===== 产量上报 =====
 const reportDialogVisible = ref(false)
-const reportHistory = ref([])
 const reportForm = ref({ quantity: 0, scrap: 0 })
 
 const predictedQuantity = computed(() =>
@@ -463,15 +450,14 @@ const remainingPlan = computed(() =>
 
 const openReportDialog = () => {
   reportForm.value = { quantity: 0, scrap: 0 }
-  reportHistory.value = []
   reportDialogVisible.value = true
 }
 
 const confirmReport = async () => {
   try {
     const wo = selectedWorkOrder.value
-    const newActual = (wo.actualQuantity || 0) + (reportForm.value.quantity || 0)
-    const newScrap = (wo.scrapQuantity || 0) + (reportForm.value.scrap || 0)
+    const newActual = predictedQuantity.value
+    const newScrap = predictedScrap.value
     const result = await updateWorkOrderApi(wo.workOrderNo, {
       actualQuantity: newActual,
       scrapQuantity: newScrap
@@ -499,13 +485,15 @@ const confirmTerminate = async () => {
 }
 
 // ===== 表单编辑 =====
-const dialogVisible = ref(false)
-const isEdit = ref(false)
-const formData = ref({
+const DEFAULT_FORM = {
   orderNo: '', processId: null, userId: null, isCritical: false,
   plannedQuantity: null, actualQuantity: 0, scrapQuantity: 0,
   startTime: '', endTime: '', remark: ''
-})
+}
+
+const dialogVisible = ref(false)
+const isEdit = ref(false)
+const formData = ref({ ...DEFAULT_FORM })
 
 const getEditableFields = (status) => {
   if (status === STATUS.CREATED) return ['orderNo', 'processId', 'userId', 'isCritical', 'plannedQuantity', 'startTime', 'endTime', 'remark']
@@ -522,11 +510,7 @@ const isFieldEditable = (field) => {
 
 const openCreateDialog = () => {
   isEdit.value = false
-  formData.value = {
-    orderNo: '', processId: null, userId: null, isCritical: false,
-    plannedQuantity: null, actualQuantity: 0, scrapQuantity: 0,
-    startTime: '', endTime: '', remark: ''
-  }
+  formData.value = { ...DEFAULT_FORM }
   dialogVisible.value = true
 }
 
@@ -556,8 +540,6 @@ const handleFormSubmit = async () => {
     }
   } catch { ElMessage.error('操作失败') }
 }
-
-const resetForm = () => {}
 
 // 删除
 const handleDelete = async () => {
