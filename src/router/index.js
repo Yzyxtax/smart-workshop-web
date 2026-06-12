@@ -15,6 +15,10 @@ import executeView from '@/views/execute/index.vue'
 import progressView from '@/views/progress/index.vue'
 import loginView from '@/views/login/index.vue'
 import layoutView from '@/views/layout/index.vue'
+// RBAC 权限管理模块
+import roleView from '@/views/role/index.vue'
+import permissionView from '@/views/permission/index.vue'
+import userPermissionView from '@/views/userPermission/index.vue'
 // import workstationView from '@/views/workstation/index.vue'
 
 const router = createRouter({
@@ -38,6 +42,10 @@ const router = createRouter({
         { path: 'workOrder', name: 'workOrder', component: workOrderView },
         { path: 'execute', name: 'execute', component: executeView },
         { path: 'progress', name: 'progress', component: progressView },
+        // RBAC 权限管理模块
+        { path: 'role', name: 'role', component: roleView },
+        { path: 'permission', name: 'permission', component: permissionView },
+        { path: 'userPermission', name: 'userPermission', component: userPermissionView },
       ]
     },
     { path: '/login', name: 'login', component: loginView },

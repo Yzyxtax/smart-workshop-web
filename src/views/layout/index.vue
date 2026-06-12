@@ -195,6 +195,25 @@ const user = JSON.parse(localStorage.getItem('user'));
                     </el-radio-group>
                     <el-menu default-active="2" class="el-menu-vertical-demo" :collapse="isCollapse" @open="handleOpen"
                         @close="handleClose" router>
+                        <!-- 系统管理菜单组 — 插入到 el-menu 内，作为第一个 sub-menu -->
+                        <el-sub-menu index="/system">
+                            <template #title>
+                                <el-icon>
+                                    <Setting />
+                                </el-icon>
+                                <span>系统管理</span>
+                            </template>
+                            <el-menu-item index="/role" @click="addTab({ index: '/role', label: '角色管理' })">
+                                <el-icon><Avatar /></el-icon>角色管理
+                            </el-menu-item>
+                            <el-menu-item index="/permission" @click="addTab({ index: '/permission', label: '权限管理' })">
+                                <el-icon><Lock /></el-icon>权限管理
+                            </el-menu-item>
+                            <el-menu-item index="/userPermission" @click="addTab({ index: '/userPermission', label: '用户权限分配' })">
+                                <el-icon><UserFilled /></el-icon>用户权限分配
+                            </el-menu-item>
+                        </el-sub-menu>
+
                         <el-sub-menu index="/management">
                             <template #title>
                                 <el-icon>
