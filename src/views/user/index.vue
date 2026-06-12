@@ -43,6 +43,9 @@
                     <el-button type="danger" size="small" @click="deleteById(scope.row.id)"><el-icon>
                             <Delete />
                         </el-icon> &nbsp; 删除</el-button>
+                    <el-button type="success" size="small" @click="handleAssignRole(scope.row)">
+                        🔑 分配角色
+                    </el-button>
                 </template>
             </el-table-column>
         </el-table>
@@ -110,6 +113,13 @@
             </span>
         </template>
     </el-dialog>
+    <!-- 快捷分配角色弹窗 -->
+    <AssignRoleDialog
+        v-model:visible="assignRoleVisible"
+        :user-id="assignRoleUserId"
+        :user-name="assignRoleUserName"
+        @saved="search"
+    />
 </template>
 
 <script setup>
@@ -117,6 +127,7 @@ import { ref, watch, onMounted } from 'vue'
 import { queryPageApi, addApi, queryInfoApi, updateApi, deleteApi } from '@/api/emp'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useProcessStore } from '@/stores/process'
+import AssignRoleDialog from '@/components/user/AssignRoleDialog.vue'
 
 //工步数据
 const processStore = useProcessStore()
@@ -301,6 +312,11 @@ const handleSelectionChange = (selection) => {
     multipleSelection.value = selection.map(item => item.id)
 }
 
+// 快捷分配角色弹窗
+const assignRoleVisible = ref(false)
+const assignRoleUserId = ref(null)
+const assignRoleUserName = ref('')
+
 //根据id批量删除员工
 const deleteByIds = async () => {
     if (multipleSelection.value.length == 0) {
@@ -323,6 +339,13 @@ const deleteByIds = async () => {
         //取消删除
         ElMessage.info('已取消删除')
     });
+}
+
+// 打开快捷分配角色弹窗
+const handleAssignRole = (row) => {
+    assignRoleUserId.value = row.id
+    assignRoleUserName.value = row.name
+    assignRoleVisible.value = true
 }
 </script>
 
