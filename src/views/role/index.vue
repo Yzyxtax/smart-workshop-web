@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoleStore } from '@/stores/role'
 import RoleFormDialog from '@/components/role/RoleFormDialog.vue'
+import RolePermissionDialog from '@/components/role/RolePermissionDialog.vue'
 
 const roleStore = useRoleStore()
 const { roleList, total } = roleStore
@@ -237,6 +238,14 @@ const handleAssignPermission = (row) => {
       v-model:visible="dialogVisible"
       :role="currentRole"
       @saved="handleSaved"
+    />
+
+    <!-- 分配权限弹窗 -->
+    <RolePermissionDialog
+      v-model:visible="permDialogVisible"
+      :role-id="permRoleId"
+      :role-name="permRoleName"
+      @saved="loadData"
     />
   </div>
 </template>
