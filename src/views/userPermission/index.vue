@@ -12,6 +12,7 @@ const userTotal = ref(0)
 const userPage = ref(1)
 const userPageSize = ref(10)
 const userLoading = ref(false)
+const loadError = ref(false)
 
 // 当前选中用户
 const selectedUser = ref(null)
@@ -19,6 +20,7 @@ const selectedUser = ref(null)
 // 加载用户列表
 const loadUsers = async () => {
   userLoading.value = true
+  loadError.value = false
   try {
     const result = await queryUserPage(
       searchKeyword.value, '', // name, position
@@ -30,7 +32,7 @@ const loadUsers = async () => {
       userTotal.value = result.data.total ?? 0
     }
   } catch (e) {
-    // handled by request interceptor
+    loadError.value = true
   } finally {
     userLoading.value = false
   }
@@ -105,6 +107,15 @@ const handleRefresh = () => {
             </div>
           </div>
           <el-empty v-if="!userLoading && userList.length === 0" description="暂无用户数据" :image-size="40" />
+
+          <!-- 错误状态 -->
+          <div v-if="loadError" class="error-state" style="padding:40px;text-align:center;">
+            <el-result icon="error" title="加载失败" sub-title="网络或服务异常">
+              <template #extra>
+                <el-button type="primary" size="small" @click="loadUsers">重试</el-button>
+              </template>
+            </el-result>
+          </div>
         </div>
 
         <div class="left-panel-footer">
@@ -208,6 +219,11 @@ const handleRefresh = () => {
 .total-text {
   font-size: 12px;
   color: #909399;
+}
+.error-state {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
 }
 .right-panel {
   flex: 1;

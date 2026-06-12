@@ -27,13 +27,26 @@ const permDialogVisible = ref(false)
 const permRoleId = ref(null)
 const permRoleName = ref('')
 
+// 加载状态
+const loading = ref(false)
+const loadError = ref(false)
+
 // 加载数据
 const loadData = async () => {
-  await roleStore.loadRoles({
-    roleName: searchName.value,
-    page: currentPage.value,
-    pageSize: pageSize.value
-  })
+  loading.value = true
+  loadError.value = false
+  try {
+    await roleStore.loadRoles({
+      roleName: searchName.value,
+      page: currentPage.value,
+      pageSize: pageSize.value
+    })
+  } catch (e) {
+    loadError.value = true
+    ElMessage.error('加载角色列表失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(() => {
@@ -183,7 +196,7 @@ const handleAssignPermission = (row) => {
         :data="roleList"
         border
         style="width: 100%"
-        v-loading="roleList.length === 0"
+        v-loading="loading"
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="55" align="center" />
@@ -217,6 +230,15 @@ const handleAssignPermission = (row) => {
       <el-empty v-if="roleList.length === 0" description="暂无角色数据">
         <el-button type="primary" @click="handleAdd">新增角色</el-button>
       </el-empty>
+
+      <!-- 错误状态 -->
+      <div v-if="loadError" class="error-state">
+        <el-result icon="error" title="加载失败" sub-title="网络或服务异常，请稍后重试">
+          <template #extra>
+            <el-button type="primary" @click="loadData">重试</el-button>
+          </template>
+        </el-result>
+      </div>
     </div>
 
     <!-- 分页 -->
@@ -258,5 +280,10 @@ const handleAssignPermission = (row) => {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+.error-state {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
 }
 </style>

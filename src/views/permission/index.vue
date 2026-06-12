@@ -21,6 +21,7 @@ const moduleOptions = [
 const selectedModule = ref('')
 // 加载中
 const loading = ref(false)
+const loadError = ref(false)
 // 总记录数
 const total = ref(0)
 // 详情弹窗
@@ -30,12 +31,13 @@ const detailData = ref({})
 // 加载数据
 const loadData = async () => {
   loading.value = true
+  loadError.value = false
   try {
     const moduleParam = selectedModule.value || undefined
     await permissionStore.loadPermissions(moduleParam)
     total.value = permissionList.value.length
   } catch (e) {
-    // 加载失败由 store 内部处理
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -136,6 +138,15 @@ const getModuleTagType = (module) => {
 
       <!-- 空状态 -->
       <el-empty v-if="!loading && permissionList.length === 0" description="该模块下暂无权限数据" />
+
+      <!-- 错误状态 -->
+      <div v-if="loadError" class="error-state">
+        <el-result icon="error" title="加载失败" sub-title="网络或服务异常，请稍后重试">
+          <template #extra>
+            <el-button type="primary" @click="loadData">重试</el-button>
+          </template>
+        </el-result>
+      </div>
     </div>
 
     <!-- 底部统计 -->
@@ -178,5 +189,10 @@ const getModuleTagType = (module) => {
   padding: 8px 0;
   font-size: 13px;
   color: #909399;
+}
+.error-state {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
 }
 </style>
