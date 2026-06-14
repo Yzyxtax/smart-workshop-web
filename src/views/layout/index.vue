@@ -4,6 +4,10 @@ import HoverButton from '@/components/HoverButton.vue'
 import { ref, watch, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { updateApi } from '@/api/emp'
+// AI 智能助手组件
+import AiAssistantFab from '@/components/aiChat/AiAssistantFab.vue'
+import AiChatDrawer from '@/components/aiChat/AiChatDrawer.vue'
+import { useAiChatStore } from '@/stores/aiChat'
 
 //处理导航栏的折叠和展开
 const isCollapse = ref(true)
@@ -165,6 +169,18 @@ const save = () => {
 
 //本地持久化信息
 const user = JSON.parse(localStorage.getItem('user'));
+
+// AI 智能助手 Store
+const aiStore = useAiChatStore()
+
+// FAB 点击 → 打开/关闭抽屉
+const handleFabToggle = (open) => {
+  if (open) {
+    aiStore.openDrawer()
+  } else {
+    aiStore.closeDrawer()
+  }
+}
 </script>
 
 <template>
@@ -211,6 +227,22 @@ const user = JSON.parse(localStorage.getItem('user'));
                             </el-menu-item>
                             <el-menu-item index="/userPermission" @click="addTab({ index: '/userPermission', label: '用户权限分配' })">
                                 <el-icon><UserFilled /></el-icon>用户权限分配
+                            </el-menu-item>
+                        </el-sub-menu>
+
+                        <!-- AI 智能助手菜单组 — 插入在系统管理之后 -->
+                        <el-sub-menu index="/ai">
+                            <template #title>
+                                <el-icon>
+                                    <ChatDotRound />
+                                </el-icon>
+                                <span>AI 智能助手</span>
+                            </template>
+                            <el-menu-item index="/aiAudit" @click="addTab({ index: '/aiAudit', label: 'AI 审计日志' })">
+                                <el-icon><Document /></el-icon>审计日志
+                            </el-menu-item>
+                            <el-menu-item index="/aiMetrics" @click="addTab({ index: '/aiMetrics', label: 'AI 监控指标' })">
+                                <el-icon><DataAnalysis /></el-icon>监控指标
                             </el-menu-item>
                         </el-sub-menu>
 
@@ -328,6 +360,19 @@ const user = JSON.parse(localStorage.getItem('user'));
 
         </el-container>
     </div>
+
+    <!-- AI 智能助手：FAB 浮动按钮 -->
+    <AiAssistantFab
+        :open="aiStore.drawerOpen"
+        @update:open="handleFabToggle"
+    />
+
+    <!-- AI 智能助手：右侧聊天抽屉 -->
+    <AiChatDrawer
+        :visible="aiStore.drawerOpen"
+        @update:visible="(val) => aiStore.drawerOpen = val"
+    />
+
     <el-dialog v-model="dialogVisible" title="修改密码" width="500">
         <el-form :model="form" :rules="rules" ref="passwordForm">
             <el-form-item label="新密码" :label-width="formLabelWidth" prop="newPassword">

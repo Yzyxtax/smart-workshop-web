@@ -1,0 +1,489 @@
+@startuml AI工具系统-实现类图
+' ============================================================
+' AI 智能交互模块 — AI 工具系统类图
+' 涵盖 smart-workshop-ai（框架）+ smart-workshop-server（工具实现）
+' 作者: AI Module Design
+' 日期: 2026-06-13
+' ============================================================
+
+skinparam backgroundColor #FEFEFE
+skinparam classBackgroundColor #F0F4FF
+skinparam interfaceBackgroundColor #E8F5E9
+skinparam enumBackgroundColor #FFF8E1
+skinparam packageBackgroundColor #FAFAFA
+skinparam stereotypeCBackgroundColor #E3F2FD
+skinparam stereotypeIBackgroundColor #E8F5E9
+skinparam linetype ortho
+
+title AI 工具系统类图 — 框架层 + 15 个业务工具实现
+
+' ============================================================
+' 模块标识
+' ============================================================
+rectangle "smart-workshop-ai 模块\n（工具框架核心）" as AIModule #E3F2FD
+rectangle "smart-workshop-server 模块\n（业务工具实现 + 权限桥接）" as ServerModule #C8E6C9
+
+' ============================================================
+' 注解层（框架层）
+' ============================================================
+AIModule .. annotation
+
+package "annotation（注解）" as AnnotationPkg #FFF3E0 {
+  annotation AiTool <<annotation>> {
+    + name(): String
+    + description(): String
+    + category(): String
+    + permissions(): String[]
+    + requiresConfirmation(): boolean
+    + label(): String
+  }
+
+  annotation ToolParam <<annotation>> {
+    + description(): String
+    + required(): boolean
+    + enumValues(): String[]
+  }
+}
+
+' ============================================================
+' 工具框架核心（smart-workshop-ai）
+' ============================================================
+AIModule .. ToolFramework
+
+package "agent（工具框架核心）" as ToolFramework #E0F2F1 {
+  interface ToolHandler <<interface>> {
+    + execute(params: Map, ctx: ToolContext): ToolResult
+  }
+
+  class ToolRegistry {
+    - handlers: Map<String, ToolHandler>
+    - metas: Map<String, AiToolMeta>
+    - cachedDefinitions: List<Map>
+    --
+    + scan(): void
+    + getToolDefinitions(): List<Map>
+    + getHandler(toolName): ToolHandler
+    + getMeta(toolName): AiToolMeta
+    + getToolNames(): Set<String>
+    + getToolCount(): int
+  }
+
+  class ToolExecutor {
+    - toolRegistry: ToolRegistry
+    - auditLogMapper: AiAuditLogMapper
+    - metricsService: AiMetricsService
+    - permissionChecker: PermissionChecker
+    --
+    + execute(toolName, params, ctx): ToolResult
+    --- 7步沙箱管道 ---
+    - {static} STEP_1_LOOKUP
+    - {static} STEP_2_VALIDATE
+    - {static} STEP_3_RBAC
+    - {static} STEP_4_CONFIRM
+    - {static} STEP_5_RATE_LIMIT
+    - {static} STEP_6_EXECUTE
+    - {static} STEP_7_AUDIT
+  }
+
+  class ToolContext {
+    + userId: Integer
+    + userName: String
+    + sessionId: Long
+    + messageId: Long
+    + userNaturalInput: String
+    + confirmed: boolean = false
+    + permissionCodes: Set<String>
+    + extra: Map<String, Object>
+  }
+
+  class ToolResult {
+    + success: boolean
+    + data: Object
+    + errorMessage: String
+    + needsConfirmation: boolean
+    + confirmationMessage: String
+    --
+    + {static} success(data): ToolResult
+    + {static} success(): ToolResult
+    + {static} error(msg): ToolResult
+    + {static} needsConfirmation(msg): ToolResult
+    + toMap(): Map<String, Object>
+  }
+
+  class AiToolMeta {
+    + name: String
+    + label: String
+    + description: String
+    + category: String
+    + permissions: String[]
+    + requiresConfirmation: boolean
+    + handlerClass: String
+    + params: List<ToolParamMeta>
+  }
+
+  class AiToolMeta.ToolParamMeta {
+    + name: String
+    + description: String
+    + required: boolean
+    + jsonType: String
+    + enumValues: String[]
+  }
+
+  class AiAuditLog {
+    + id: Long
+    + sessionId: Long
+    + messageId: Long
+    + userId: Integer
+    + toolName: String
+    + toolParams: String
+    + executionResult: String
+    + success: Boolean
+    + errorMessage: String
+    + durationMs: Integer
+    + userNaturalInput: String
+    + createdAt: LocalDateTime
+  }
+}
+
+' ============================================================
+' 权限桥接（smart-workshop-server）
+' ============================================================
+ServerModule .. PermissionBridge
+
+package "config（权限桥接）" as PermissionBridge #BBDEFB {
+  class AiPermissionBridge {
+    - toolExecutor: ToolExecutor
+    - authService: AuthService
+    --
+    + init(): void
+  }
+
+  class AuthService <<external>> {
+    + getUserPermissionCodes(userId): Set<String>
+  }
+}
+
+' ============================================================
+' AI 工具实现 — BOM 管理
+' ============================================================
+ServerModule .. BomTools
+
+package "tool.bom（BOM管理工具）" as BomTools #C8E6C9 {
+  class CreateBomTool {
+    --- @AiTool(name="create_bom") ---
+    --- category: "BOM管理" ---
+    --- permissions: SYS_BOM_MANAGE ---
+    + bomDrawingNo: String <<@ToolParam(required)>>
+    + bomNameSpec: String <<@ToolParam(required)>>
+    + bomMaterial: String <<@ToolParam>>
+    + bomQuantity: Integer <<@ToolParam>>
+    + bomType: String <<@ToolParam(enumValues={"成品","半成品","原材料"})>>
+    - bomService: bomService
+    --
+    + execute(params, ctx): ToolResult
+  }
+
+  class SearchBomTool {
+    --- @AiTool(name="search_bom") ---
+    --- category: "BOM管理" ---
+    + keyword: String <<@ToolParam(required)>>
+    - bomService: bomService
+    --
+    + execute(params, ctx): ToolResult
+  }
+}
+
+' ============================================================
+' AI 工具实现 — 设备管理
+' ============================================================
+ServerModule .. EquipmentTools
+
+package "tool.equipment（设备管理工具）" as EquipmentTools #A5D6A7 {
+  class SearchEquipmentTool {
+    --- @AiTool(name="search_equipment") ---
+    --- category: "设备管理" ---
+    + keyword: String <<@ToolParam(required)>>
+    - equipmentService: equipmentService
+    --
+    + execute(params, ctx): ToolResult
+  }
+
+  class GetEquipmentDetailTool {
+    --- @AiTool(name="get_equipment_detail") ---
+    --- category: "设备管理" ---
+    + equipmentId: Integer <<@ToolParam(required)>>
+    - equipmentService: equipmentService
+    --
+    + execute(params, ctx): ToolResult
+  }
+
+  class AddEquipmentFunctionTool {
+    --- @AiTool(name="add_equipment_function") ---
+    --- category: "设备管理" ---
+    --- permissions: SYS_EQUIPMENT_MANAGE ---
+    + equipmentId: Integer <<@ToolParam(required)>>
+    + functionDescription: String <<@ToolParam(required)>>
+    - equipmentService: equipmentService
+    --
+    + execute(params, ctx): ToolResult
+  }
+
+  class UpdateEquipmentFunctionTool {
+    --- @AiTool(name="update_equipment_function") ---
+    --- category: "设备管理" ---
+    --- permissions: SYS_EQUIPMENT_MANAGE ---
+    + equipmentId: Integer <<@ToolParam(required)>>
+    + functionId: Integer <<@ToolParam(required)>>
+    + newDescription: String <<@ToolParam(required)>>
+    - equipmentService: equipmentService
+    --
+    + execute(params, ctx): ToolResult
+  }
+
+  class DeleteEquipmentFunctionTool {
+    --- @AiTool(name="delete_equipment_function") ---
+    --- category: "设备管理" ---
+    --- permissions: SYS_EQUIPMENT_MANAGE ---
+    --- requiresConfirmation: TRUE ---
+    + equipmentId: Integer <<@ToolParam(required)>>
+    + functionId: Integer <<@ToolParam(required)>>
+    - equipmentService: equipmentService
+    --
+    + execute(params, ctx): ToolResult
+  }
+}
+
+' ============================================================
+' AI 工具实现 — 生产管理
+' ============================================================
+ServerModule .. ProductionTools
+
+package "tool.production（生产管理工具）" as ProductionTools #81C784 {
+  class QueryPlanStatusTool {
+    --- @AiTool(name="query_plan_status") ---
+    --- category: "生产管理" ---
+    + planNo: String <<@ToolParam>>
+    + status: String <<@ToolParam(enumValues={"CREATED","RELEASED","RUNNING","PAUSED","COMPLETED","TERMINATED"})>>
+    - planService: planService
+    --
+    + execute(params, ctx): ToolResult
+  }
+
+  class QueryOrderStatusTool {
+    --- @AiTool(name="query_order_status") ---
+    --- category: "生产管理" ---
+    + orderNo: String <<@ToolParam>>
+    + status: String <<@ToolParam(enumValues={"CREATED","RELEASED","RUNNING","PAUSED","COMPLETED","TERMINATED"})>>
+    + planNo: String <<@ToolParam>>
+    - orderService: orderService
+    --
+    + execute(params, ctx): ToolResult
+  }
+
+  class QueryWorkOrderStatusTool {
+    --- @AiTool(name="query_work_order_status") ---
+    --- category: "生产管理" ---
+    + workOrderNo: String <<@ToolParam>>
+    + status: String <<@ToolParam(enumValues={"CREATED","RELEASED","RUNNING","PAUSED","COMPLETED","TERMINATED"})>>
+    + orderNo: String <<@ToolParam>>
+    + isCritical: Boolean <<@ToolParam>>
+    - workOrderService: workOrderService
+    --
+    + execute(params, ctx): ToolResult
+  }
+}
+
+' ============================================================
+' AI 工具实现 — 产线 / 工序 / 工步 / 班组
+' ============================================================
+ServerModule .. OtherTools
+
+package "tool.line（产线）" as LineTools #66BB6A {
+  class SearchLineTool {
+    --- @AiTool(name="search_line") ---
+    --- category: "产线管理" ---
+    + keyword: String <<@ToolParam(required)>>
+    - lineService: lineService
+    --
+    + execute(params, ctx): ToolResult
+  }
+}
+
+package "tool.process（工序）" as ProcessTools #4CAF50 {
+  class SearchProcessTool {
+    --- @AiTool(name="search_process") ---
+    --- category: "工序管理" ---
+    + keyword: String <<@ToolParam(required)>>
+    - processFlowService: processFlowService
+    --
+    + execute(params, ctx): ToolResult
+  }
+}
+
+package "tool.workstep（工步）" as WorkStepTools #43A047 {
+  class SearchWorkStepTool {
+    --- @AiTool(name="search_work_step") ---
+    --- category: "工步管理" ---
+    + keyword: String <<@ToolParam(required)>>
+    - workStepService: workStepService
+    --
+    + execute(params, ctx): ToolResult
+  }
+
+  class AddWorkStepTool {
+    --- @AiTool(name="add_work_step") ---
+    --- category: "工步管理" ---
+    --- permissions: SYS_PROCESS_MANAGE ---
+    + stepName: String <<@ToolParam(required)>>
+    + stepDescription: String <<@ToolParam>>
+    + equipmentId: Integer <<@ToolParam>>
+    + functionId: Integer <<@ToolParam>>
+    - workStepService: workStepService
+    --
+    + execute(params, ctx): ToolResult
+  }
+}
+
+package "tool.team（班组）" as TeamTools #388E3C {
+  class SearchTeamTool {
+    --- @AiTool(name="search_team") ---
+    --- category: "班组管理" ---
+    + keyword: String <<@ToolParam(required)>>
+    - teamService: teamService
+    --
+    + execute(params, ctx): ToolResult
+  }
+}
+
+' ============================================================
+' 业务 Service（smart-workshop-server 已有服务）
+' ============================================================
+package "service（已有业务服务）" as BizServices #FFF9C4 {
+  class bomService <<existing>> {
+    + addBom(bom): int
+    + getAllMaterialName(): List<BomTreeData>
+  }
+
+  class equipmentService <<existing>> {
+    + getAllEquipment(param): ResultPage<Equipment>
+    + getEquipmentById(id): Equipment
+    + updateEquipment(eq): int
+  }
+
+  class planService <<existing>> {
+    + getAllPlan(): List<Plan>
+  }
+
+  class orderService <<existing>> {
+    + getAllOrder(): List<ProductionOrder>
+  }
+
+  class workOrderService <<existing>> {
+    + getAllWorkOrders(): List<WorkOrder>
+  }
+
+  class lineService <<existing>> {
+    + getAllLine(): List<ProductionLine>
+  }
+
+  class processFlowService <<existing>> {
+    + getAllFlow(): List<ProcessFlow>
+  }
+
+  class workStepService <<existing>> {
+    + getAllWorkStep(): List<WorkStep>
+    + addWorkStep(step): int
+  }
+
+  class teamService <<existing>> {
+    + getAllTeam(): List<TeamItem>
+  }
+}
+
+' ============================================================
+' 关系连线
+' ============================================================
+
+' --- 注解应用 ---
+AiTool ..> ToolHandler : marks classes
+ToolParam ..> ToolHandler : marks fields
+
+' --- 框架内部关系 ---
+ToolRegistry --> ToolHandler : holds references
+ToolRegistry *--> AiToolMeta : builds metadata
+AiToolMeta *-- AiToolMeta.ToolParamMeta
+ToolExecutor --> ToolRegistry : looks up
+ToolExecutor --> ToolHandler : calls
+ToolExecutor ..> ToolContext : receives
+ToolExecutor ..> ToolResult : returns
+ToolExecutor ..> AiAuditLog : writes
+
+' --- 权限桥接 ---
+AiPermissionBridge --> ToolExecutor : injects PermissionChecker
+AiPermissionBridge --> AuthService : delegates
+
+' --- 所有工具实现 ToolHandler ---
+CreateBomTool ..|> ToolHandler
+SearchBomTool ..|> ToolHandler
+SearchEquipmentTool ..|> ToolHandler
+GetEquipmentDetailTool ..|> ToolHandler
+AddEquipmentFunctionTool ..|> ToolHandler
+UpdateEquipmentFunctionTool ..|> ToolHandler
+DeleteEquipmentFunctionTool ..|> ToolHandler
+QueryPlanStatusTool ..|> ToolHandler
+QueryOrderStatusTool ..|> ToolHandler
+QueryWorkOrderStatusTool ..|> ToolHandler
+SearchLineTool ..|> ToolHandler
+SearchProcessTool ..|> ToolHandler
+SearchWorkStepTool ..|> ToolHandler
+AddWorkStepTool ..|> ToolHandler
+SearchTeamTool ..|> ToolHandler
+
+' --- 工具依赖业务 Service ---
+CreateBomTool --> bomService : calls
+SearchBomTool --> bomService : calls
+SearchEquipmentTool --> equipmentService : calls
+GetEquipmentDetailTool --> equipmentService : calls
+AddEquipmentFunctionTool --> equipmentService : calls
+UpdateEquipmentFunctionTool --> equipmentService : calls
+DeleteEquipmentFunctionTool --> equipmentService : calls
+QueryPlanStatusTool --> planService : calls
+QueryOrderStatusTool --> orderService : calls
+QueryWorkOrderStatusTool --> workOrderService : calls
+SearchLineTool --> lineService : calls
+SearchProcessTool --> processFlowService : calls
+SearchWorkStepTool --> workStepService : calls
+AddWorkStepTool --> workStepService : calls
+SearchTeamTool --> teamService : calls
+
+' ============================================================
+' 图例 / 注释
+' ============================================================
+legend right
+  **模块分层**
+  | 蓝色背景 | smart-workshop-ai 模块（框架） |
+  | 绿色背景 | smart-workshop-server 模块（实现） |
+  | 黄色背景 | 已有业务 Service（复用） |
+  | 粉红背景 | 注解定义 |
+
+  **工具统计**
+  | 分类 | 数量 | 需权限 | 需确认 |
+  | BOM管理 | 2 | 1 | 0 |
+  | 设备管理 | 5 | 3 | 1 |
+  | 产线管理 | 1 | 0 | 0 |
+  | 工序管理 | 1 | 0 | 0 |
+  | 工步管理 | 2 | 1 | 0 |
+  | 班组管理 | 1 | 0 | 0 |
+  | 生产管理 | 3 | 0 | 0 |
+  | **合计** | **15** | **5** | **1** |
+
+  **安全机制**
+  1. @AiTool 启动时自动扫描注册 → ToolRegistry
+  2. LLM 根据 JSON Schema 匹配并调用工具
+  3. ToolExecutor 7步沙箱管道执行
+  4. 权限校验通过 AiPermissionBridge 桥接 RBAC
+  5. 破坏性操作需用户二次确认
+  6. 所有操作写入 ai_audit_log 审计表
+endlegend
+
+@enduml

@@ -1,0 +1,607 @@
+@startuml AI智能交互模块-核心架构类图
+' ============================================================
+' AI 智能交互模块 — 核心架构类图
+' 模块: smart-workshop-ai
+' 作者: AI Module Design
+' 日期: 2026-06-13
+' ============================================================
+
+skinparam backgroundColor #FEFEFE
+skinparam classBackgroundColor #F0F4FF
+skinparam interfaceBackgroundColor #E8F5E9
+skinparam enumBackgroundColor #FFF8E1
+skinparam packageBackgroundColor #FAFAFA
+skinparam stereotypeCBackgroundColor #E3F2FD
+skinparam stereotypeIBackgroundColor #E8F5E9
+skinparam stereotypeEBackgroundColor #FFF8E1
+skinparam linetype ortho
+
+title AI 智能交互模块 — 核心架构类图（smart-workshop-ai 模块）
+
+' ============================================================
+' 控制器层 (controller)
+' ============================================================
+package "controller" #E3F2FD {
+  class AiChatController {
+    - sessionService: AiSessionService
+    - aiAgentService: AiAgentService
+    --
+    + createSession(request, body): Result
+    + listSessions(request): Result
+    + getSession(request, sessionId): Result
+    + deleteSession(request, sessionId): Result
+    + sendMessage(sessionId, body): SseEmitter
+    - extractUserId(request): Integer
+    - extractToken(request): String
+  }
+
+  class AiAuditController {
+    - auditService: AiAuditService
+    --
+    + queryAuditLogs(param): Result
+  }
+
+  class AiMetricsController {
+    - metricsService: AiMetricsService
+    - toolRegistry: ToolRegistry
+    --
+    + getMetrics(): Result
+  }
+}
+
+' ============================================================
+' DTO 层 (dto)
+' ============================================================
+package "dto" #F3E5F5 {
+  class SendMessageRequest {
+    + content: String
+  }
+
+  class SessionCreateRequest {
+    + title: String
+  }
+
+  class AiAuditQueryParam {
+    + userId: Integer
+    + toolName: String
+    + startTime: String
+    + endTime: String
+    + success: Boolean
+    + page: Integer = 1
+    + pageSize: Integer = 10
+  }
+}
+
+' ============================================================
+' 实体层 (entity)
+' ============================================================
+package "entity" #E8F5E9 {
+  class AiChatSession {
+    + id: Long
+    + userId: Integer
+    + title: String
+    + status: String
+    + createdAt: LocalDateTime
+    + updatedAt: LocalDateTime
+  }
+
+  class AiChatMessage {
+    + id: Long
+    + sessionId: Long
+    + role: String
+    + content: String
+    + toolCalls: String
+    + tokenUsage: String
+    + createdAt: LocalDateTime
+  }
+
+  class AiAuditLog {
+    + id: Long
+    + sessionId: Long
+    + messageId: Long
+    + userId: Integer
+    + toolName: String
+    + toolParams: String
+    + executionResult: String
+    + targetType: String
+    + targetId: String
+    + success: Boolean
+    + errorMessage: String
+    + durationMs: Integer
+    + userNaturalInput: String
+    + createdAt: LocalDateTime
+  }
+}
+
+' ============================================================
+' 枚举层 (enums)
+' ============================================================
+package "enums" #FFF8E1 {
+  enum SseEventType {
+    THINKING
+    TEXT_DELTA
+    TOOL_CALL
+    TOOL_RESULT
+    DONE
+    ERROR
+    --
+    + toEvent(data): SseEventBuilder
+  }
+
+  enum MessageRole {
+    USER
+    ASSISTANT
+    SYSTEM
+    TOOL
+    --
+    + code: String
+    + desc: String
+  }
+
+  enum SessionStatus {
+    ACTIVE
+    ARCHIVED
+    --
+    + code: String
+    + desc: String
+  }
+
+  enum AiEvent.EventType {
+    TEXT_DELTA
+    TOOL_USE
+    TEXT_COMPLETE
+    ERROR
+  }
+}
+
+' ============================================================
+' Agent 层 (agent) — 核心调度
+' ============================================================
+package "agent" #E0F2F1 {
+  interface AiAgentService <<interface>> {
+    + process(sessionId, message, emitter): void
+  }
+
+  class AiAgentServiceImpl {
+    - messageMapper: AiChatMessageMapper
+    - sessionService: AiSessionService
+    - aiProvider: AiProvider
+    - toolRegistry: ToolRegistry
+    - toolExecutor: ToolExecutor
+    - metricsService: AiMetricsService
+    - aiProperties: AiProperties
+    - objectMapper: ObjectMapper
+    - MAX_TOOL_ROUNDS: int = 5
+    - CONFIRM_KEYWORDS: Set<String>
+    --
+    + process(sessionId, request, emitter): void
+    - buildContextMessages(sessionId, userId): List
+    - buildSystemPrompt(userId): String
+    - detectConfirmation(messages): boolean
+    - getCurrentUserId(): Integer
+    - getCurrentUserName(): String
+    - extractToken(request): String
+    - sendSseEvent(emitter, type, data): void
+    - toJson(obj): String
+    - toLong(obj): long
+  }
+
+  class AiEvent {
+    + type: EventType
+    + data: Object
+    + toolUses: List<ToolUse>
+    + tokenUsage: Map<String, Object>
+  }
+
+  class AiEvent.ToolUse {
+    + id: String
+    + name: String
+    + params: Map<String, Object>
+  }
+
+  class ChatRequest {
+    + model: String
+    + messages: List<Map>
+    + tools: List<Map>
+    + maxTokens: Integer
+    + temperature: Double
+    + stream: Boolean
+  }
+
+  class ToolContext {
+    + userId: Integer
+    + userName: String
+    + sessionId: Long
+    + messageId: Long
+    + userNaturalInput: String
+    + confirmed: boolean = false
+    + permissionCodes: Set<String>
+    + extra: Map<String, Object>
+  }
+
+  interface AiProvider <<interface>> {
+    + streamChat(request): Flux<AiEvent>
+    + supports(provider): boolean
+  }
+
+  class AiProviderFactory {
+    - providers: List<AiProvider>
+    - aiProperties: AiProperties
+    --
+    + aiProvider(): AiProvider
+  }
+}
+
+' ============================================================
+' Provider 实现层 (agent.provider)
+' ============================================================
+package "agent.provider" #E8EAF6 {
+  class ClaudeProvider {
+    + streamChat(request): Flux<AiEvent>
+    + supports(provider): boolean
+  }
+
+  class OpenAiProvider {
+    + streamChat(request): Flux<AiEvent>
+    + supports(provider): boolean
+  }
+}
+
+' ============================================================
+' 工具系统层 (agent) — 7步沙箱管道
+' ============================================================
+package "agent (工具系统)" #FCE4EC {
+  interface ToolHandler <<interface>> {
+    + execute(params, ctx): ToolResult
+  }
+
+  class ToolRegistry {
+    - applicationContext: ApplicationContext
+    - handlers: Map<String, ToolHandler>
+    - metas: Map<String, AiToolMeta>
+    - cachedDefinitions: List<Map>
+    --
+    + scan(): void
+    + getToolDefinitions(): List<Map>
+    + getHandler(toolName): ToolHandler
+    + getMeta(toolName): AiToolMeta
+    + getToolNames(): Set<String>
+    + getToolCount(): int
+    - extractParamMetas(beanClass): List
+    - mapJavaTypeToJsonType(javaType): String
+    - buildDefinitions(): void
+  }
+
+  class ToolExecutor {
+    - toolRegistry: ToolRegistry
+    - auditLogMapper: AiAuditLogMapper
+    - metricsService: AiMetricsService
+    - aiProperties: AiProperties
+    - objectMapper: ObjectMapper
+    - permissionChecker: PermissionChecker
+    - sessionRateLimiters: ConcurrentHashMap
+    --
+    + setPermissionChecker(checker): void
+    + execute(toolName, params, ctx): ToolResult
+    - validateParams(meta, params): String
+    - checkRateLimit(sessionId): void
+    - fail(auditLog, startTime, msg): ToolResult
+    - toJson(obj): String
+  }
+
+  class ToolExecutor.PermissionChecker <<interface>> {
+    + getUserPermissionCodes(userId): Set<String>
+  }
+
+  class ToolResult {
+    + success: boolean
+    + data: Object
+    + errorMessage: String
+    + needsConfirmation: boolean = false
+    + confirmationMessage: String
+    --
+    + {static} success(data): ToolResult
+    + {static} success(): ToolResult
+    + {static} error(msg): ToolResult
+    + {static} needsConfirmation(msg): ToolResult
+    + toMap(): Map<String, Object>
+  }
+
+  class AiToolMeta {
+    + name: String
+    + label: String
+    + description: String
+    + category: String
+    + permissions: String[]
+    + requiresConfirmation: boolean
+    + handlerClass: String
+    + params: List<ToolParamMeta>
+  }
+
+  class AiToolMeta.ToolParamMeta {
+    + name: String
+    + description: String
+    + required: boolean
+    + jsonType: String
+    + enumValues: String[]
+  }
+}
+
+' ============================================================
+' 注解层 (annotation)
+' ============================================================
+package "annotation" #FFF3E0 {
+  annotation AiTool {
+    + name(): String
+    + description(): String
+    + category(): String
+    + permissions(): String[]
+    + requiresConfirmation(): boolean
+    + label(): String
+  }
+
+  annotation ToolParam {
+    + description(): String
+    + required(): boolean
+    + enumValues(): String[]
+  }
+}
+
+' ============================================================
+' 服务层 (service)
+' ============================================================
+package "service" #F1F8E9 {
+  interface AiSessionService <<interface>> {
+    + createSession(userId, title): AiChatSession
+    + listSessions(userId): List<AiChatSession>
+    + getSession(sessionId): AiChatSession
+    + getSessionWithMessages(sessionId): AiChatSession
+    + getSessionMessages(sessionId): List<AiChatMessage>
+    + deleteSession(sessionId): void
+    + saveUserMessage(sessionId, content): AiChatMessage
+    + saveAssistantMessage(sessionId, content, toolCalls, tokenUsage): AiChatMessage
+    + touchSession(sessionId): void
+    + autoGenerateTitle(sessionId, content): void
+  }
+
+  interface AiAuditService <<interface>> {
+    + queryAuditLogs(param): ResultPage<AiAuditLog>
+    + recordAudit(auditLog): void
+    + getToolStatistics(days): Map<String, Object>
+  }
+
+  interface AiMetricsService <<interface>> {
+    + getMetricsSnapshot(): Map<String, Object>
+    + recordLlmSuccess(latencyMs, ttftMs, promptTokens, completionTokens): void
+    + recordLlmFailure(errorType): void
+    + recordToolCall(toolName): void
+  }
+}
+
+package "service.impl" #E8F5E9 {
+  class AiSessionServiceImpl {
+    + createSession(userId, title): AiChatSession
+    + listSessions(userId): List<AiChatSession>
+    + getSession(sessionId): AiChatSession
+    + getSessionWithMessages(sessionId): AiChatSession
+    + getSessionMessages(sessionId): List<AiChatMessage>
+    + deleteSession(sessionId): void
+    + saveUserMessage(sessionId, content): AiChatMessage
+    + saveAssistantMessage(sessionId, content, toolCalls, tokenUsage): AiChatMessage
+    + touchSession(sessionId): void
+    + autoGenerateTitle(sessionId, content): void
+  }
+
+  class AiAuditServiceImpl {
+    + queryAuditLogs(param): ResultPage<AiAuditLog>
+    + recordAudit(auditLog): void
+    + getToolStatistics(days): Map<String, Object>
+  }
+
+  class AiMetricsServiceImpl {
+    - totalRequests: AtomicLong
+    - successRequests: AtomicLong
+    - totalLatencyMs: AtomicLong
+    - totalTtftMs: AtomicLong
+    - totalPromptTokens: AtomicLong
+    - totalCompletionTokens: AtomicLong
+    - toolCallCounts: ConcurrentHashMap
+    - errorCounts: ConcurrentHashMap
+    --
+    + getMetricsSnapshot(): Map<String, Object>
+    + recordLlmSuccess(latencyMs, ttftMs, promptTokens, completionTokens): void
+    + recordLlmFailure(errorType): void
+    + recordToolCall(toolName): void
+  }
+}
+
+' ============================================================
+' 配置层 (config)
+' ============================================================
+package "config" #ECEFF1 {
+  class AiProperties {
+    + llm: LlmConfig
+    + session: SessionConfig
+    + rateLimit: RateLimitConfig
+    + message: MessageConfig
+  }
+
+  class AiProperties.LlmConfig {
+    + provider: String = "claude"
+    + apiKey: String
+    + model: String = "claude-opus-4-8"
+    + baseUrl: String
+    + connectTimeout: String = "10s"
+    + readTimeout: String = "60s"
+    + maxTokens: Integer = 4096
+    + temperature: Double = 0.3
+    + maxRetries: Integer = 3
+    + retryBackoffBaseMs: Long = 1000L
+  }
+
+  class AiProperties.SessionConfig {
+    + maxHistoryRounds: Integer = 20
+    + retentionDays: Integer = 90
+    + archiveEnabled: Boolean = false
+  }
+
+  class AiProperties.RateLimitConfig {
+    + maxToolCallsPerMinute: Integer = 10
+  }
+
+  class AiProperties.MessageConfig {
+    + maxInputLength: Integer = 4000
+  }
+}
+
+' ============================================================
+' 异常层 (exception)
+' ============================================================
+package "exception" #FFEBEE {
+  class AiRateLimitException {
+    + AiRateLimitException(message)
+    + AiRateLimitException(message, cause)
+  }
+
+  class AiServiceException {
+    + AiServiceException(message)
+    + AiServiceException(message, cause)
+  }
+}
+
+' ============================================================
+' 数据访问层 (mapper)
+' ============================================================
+package "mapper" #FAFAFA {
+  interface AiChatSessionMapper <<interface>> {
+    + insert(session): int
+    + selectById(id): AiChatSession
+    + selectByUserId(userId): List<AiChatSession>
+    + update(session): int
+    + deleteById(id): int
+    + deleteExpiredSessions(days): int
+  }
+
+  interface AiChatMessageMapper <<interface>> {
+    + insert(message): int
+    + selectRecentBySessionId(sessionId, limit): List<AiChatMessage>
+    + countUserMessages(sessionId): int
+  }
+
+  interface AiAuditLogMapper <<interface>> {
+    + insert(log): int
+    + selectByCondition(param): List<AiAuditLog>
+    + countByTool(days): List<Map>
+    + avgDuration(days): Double
+  }
+}
+
+' ============================================================
+' 关系连线
+' ============================================================
+
+' --- 控制器依赖 ---
+AiChatController --> AiSessionService : uses
+AiChatController --> AiAgentService : uses
+AiChatController ..> SendMessageRequest : <<creates>>
+AiChatController ..> SessionCreateRequest : <<creates>>
+
+AiAuditController --> AiAuditService : uses
+AiAuditController ..> AiAuditQueryParam : <<creates>>
+
+AiMetricsController --> AiMetricsService : uses
+AiMetricsController --> ToolRegistry : uses
+
+' --- Agent 调度器核心关系 ---
+AiAgentServiceImpl ..|> AiAgentService
+AiAgentServiceImpl --> AiProvider : calls
+AiAgentServiceImpl --> ToolRegistry : reads tools
+AiAgentServiceImpl --> ToolExecutor : delegates
+AiAgentServiceImpl --> AiSessionService : saves messages
+AiAgentServiceImpl --> AiMetricsService : records metrics
+AiAgentServiceImpl --> AiProperties : reads config
+AiAgentServiceImpl ..> AiEvent : emits
+AiAgentServiceImpl ..> ChatRequest : builds
+AiAgentServiceImpl ..> ToolContext : builds
+
+' --- Provider 层 ---
+AiProviderFactory --> AiProvider : selects
+AiProviderFactory --> AiProperties : reads provider config
+ClaudeProvider ..|> AiProvider
+OpenAiProvider ..|> AiProvider
+AiProvider ..> ChatRequest : receives
+AiProvider ..> AiEvent : returns
+
+' --- 工具系统 ---
+ToolRegistry ..> ToolHandler : registers
+ToolRegistry ..> AiToolMeta : builds
+ToolRegistry --> ApplicationContext : scans
+ToolRegistry ..|> ApplicationContextAware
+AiToolMeta *-- AiToolMeta.ToolParamMeta
+
+ToolExecutor --> ToolRegistry : looks up
+ToolExecutor --> AiAuditLogMapper : writes audit
+ToolExecutor --> AiMetricsService : records count
+ToolExecutor --> AiProperties : reads rate limit
+ToolExecutor ..> ToolContext : receives
+ToolExecutor ..> ToolResult : returns
+ToolExecutor ..> ToolHandler : calls
+ToolExecutor o-- ToolExecutor.PermissionChecker
+
+' --- 注解 ---
+AiTool ..> ToolHandler : marks
+ToolParam ..> ToolHandler : marks fields
+
+' --- 服务实现 ---
+AiSessionServiceImpl ..|> AiSessionService
+AiAuditServiceImpl ..|> AiAuditService
+AiMetricsServiceImpl ..|> AiMetricsService
+
+' --- 服务引用 ---
+AiSessionServiceImpl --> AiChatSessionMapper : uses
+AiSessionServiceImpl --> AiChatMessageMapper : uses
+AiAuditServiceImpl --> AiAuditLogMapper : uses
+
+' --- 配置绑定 ---
+AiProperties *-- AiProperties.LlmConfig
+AiProperties *-- AiProperties.SessionConfig
+AiProperties *-- AiProperties.RateLimitConfig
+AiProperties *-- AiProperties.MessageConfig
+
+' --- 异常 ---
+AiRateLimitException --|> RuntimeException
+AiServiceException --|> RuntimeException
+ToolExecutor ..> AiRateLimitException : throws
+AiAgentServiceImpl ..> AiRateLimitException : catches
+AiAgentServiceImpl ..> AiServiceException : catches
+
+' --- 实体与枚举 ---
+AiChatSession ..> SessionStatus : uses
+AiChatMessage ..> MessageRole : uses
+AiAgentServiceImpl ..> SseEventType : emits
+AiAgentServiceImpl ..> MessageRole : filters
+AiEvent *-- AiEvent.EventType
+AiEvent *-- AiEvent.ToolUse
+
+' ============================================================
+' 图例
+' ============================================================
+legend right
+  **图例说明**
+  - <<interface>> 接口
+  - 实线三角 = 实现关系
+  - 实线箭头 = 依赖/调用关系
+  - 虚线箭头 = 创建/使用关系
+  - 菱形+实线 = 组合关系
+
+  **核心流程**:
+  1. AiChatController 接收用户消息
+  2. 委托 AiAgentServiceImpl 处理
+  3. Agent 通过 AiProvider 调用 LLM
+  4. LLM 返回工具调用 → ToolExecutor 执行
+  5. ToolExecutor 7步沙箱管道执行
+  6. 结果返回 LLM 继续推理（最多5轮）
+  7. 最终回复通过 SSE 推送前端
+endlegend
+
+@enduml

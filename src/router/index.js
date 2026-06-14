@@ -19,6 +19,9 @@ import layoutView from '@/views/layout/index.vue'
 import roleView from '@/views/role/index.vue'
 import permissionView from '@/views/permission/index.vue'
 import userPermissionView from '@/views/userPermission/index.vue'
+// AI 智能助手模块
+import aiAuditView from '@/views/aiAudit/index.vue'
+import aiMetricsView from '@/views/aiMetrics/index.vue'
 // import workstationView from '@/views/workstation/index.vue'
 
 const router = createRouter({
@@ -46,6 +49,9 @@ const router = createRouter({
         { path: 'role', name: 'role', component: roleView },
         { path: 'permission', name: 'permission', component: permissionView },
         { path: 'userPermission', name: 'userPermission', component: userPermissionView },
+        // AI 智能助手模块
+        { path: 'aiAudit', name: 'aiAudit', component: aiAuditView },
+        { path: 'aiMetrics', name: 'aiMetrics', component: aiMetricsView },
       ]
     },
     { path: '/login', name: 'login', component: loginView },

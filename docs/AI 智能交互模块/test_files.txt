@@ -1,0 +1,158 @@
+# AI 智能交互模块 — 本次变更涉及文件清单
+# 按模块 → 功能点排序
+
+# ==================== AI 模块（smart-workshop-ai，全新子模块） ====================
+
+# --- pom.xml ---
+smart-workshop-ai/pom.xml
+
+# --- Annotation（AI 工具注解） ---
+smart-workshop-ai/src/main/java/com/xtax/ai/annotation/AiTool.java
+smart-workshop-ai/src/main/java/com/xtax/ai/annotation/ToolParam.java
+
+# --- Agent（核心 Agent 框架：LLM 调用、工具调度、流式事件） ---
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/AiAgentService.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/AiAgentServiceImpl.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/AiEvent.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/AiProvider.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/AiProviderFactory.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/AiToolMeta.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/ChatRequest.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/ToolContext.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/ToolExecutor.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/ToolHandler.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/ToolRegistry.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/ToolResult.java
+
+# --- Provider（LLM 供应商实现：Claude / OpenAI） ---
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/provider/ClaudeProvider.java
+smart-workshop-ai/src/main/java/com/xtax/ai/agent/provider/OpenAiProvider.java
+
+# --- Config（AI 模块配置） ---
+smart-workshop-ai/src/main/java/com/xtax/ai/config/AiProperties.java
+
+# --- Controller（AI 控制器：对话、审计、指标） ---
+smart-workshop-ai/src/main/java/com/xtax/ai/controller/AiAuditController.java
+smart-workshop-ai/src/main/java/com/xtax/ai/controller/AiChatController.java
+smart-workshop-ai/src/main/java/com/xtax/ai/controller/AiMetricsController.java
+
+# --- DTO（请求对象） ---
+smart-workshop-ai/src/main/java/com/xtax/ai/dto/AiAuditQueryParam.java
+smart-workshop-ai/src/main/java/com/xtax/ai/dto/SendMessageRequest.java
+smart-workshop-ai/src/main/java/com/xtax/ai/dto/SessionCreateRequest.java
+
+# --- Entity（实体） ---
+smart-workshop-ai/src/main/java/com/xtax/ai/entity/AiAuditLog.java
+smart-workshop-ai/src/main/java/com/xtax/ai/entity/AiChatMessage.java
+smart-workshop-ai/src/main/java/com/xtax/ai/entity/AiChatSession.java
+
+# --- Enum（枚举） ---
+smart-workshop-ai/src/main/java/com/xtax/ai/enums/MessageRole.java
+smart-workshop-ai/src/main/java/com/xtax/ai/enums/SessionStatus.java
+smart-workshop-ai/src/main/java/com/xtax/ai/enums/SseEventType.java
+
+# --- Exception（异常） ---
+smart-workshop-ai/src/main/java/com/xtax/ai/exception/AiRateLimitException.java
+smart-workshop-ai/src/main/java/com/xtax/ai/exception/AiServiceException.java
+
+# --- Mapper（数据访问接口） ---
+smart-workshop-ai/src/main/java/com/xtax/ai/mapper/AiAuditLogMapper.java
+smart-workshop-ai/src/main/java/com/xtax/ai/mapper/AiChatMessageMapper.java
+smart-workshop-ai/src/main/java/com/xtax/ai/mapper/AiChatSessionMapper.java
+
+# --- Service 接口 ---
+smart-workshop-ai/src/main/java/com/xtax/ai/service/AiAuditService.java
+smart-workshop-ai/src/main/java/com/xtax/ai/service/AiMetricsService.java
+smart-workshop-ai/src/main/java/com/xtax/ai/service/AiSessionService.java
+
+# --- Service 实现 ---
+smart-workshop-ai/src/main/java/com/xtax/ai/service/impl/AiAuditServiceImpl.java
+smart-workshop-ai/src/main/java/com/xtax/ai/service/impl/AiMetricsServiceImpl.java
+smart-workshop-ai/src/main/java/com/xtax/ai/service/impl/AiSessionServiceImpl.java
+
+# --- 资源配置 ---
+smart-workshop-ai/src/main/resources/application-ai.yml
+
+# --- Mapper XML（MyBatis SQL 映射） ---
+smart-workshop-ai/src/main/resources/com/xtax/ai/mapper/AiAuditLogMapper.xml
+
+# ==================== AI 模块 单元测试 ====================
+
+# --- Agent 框架测试 ---
+smart-workshop-ai/src/test/java/com/xtax/ai/agent/ToolResultTest.java
+smart-workshop-ai/src/test/java/com/xtax/ai/agent/ToolRegistryTest.java
+smart-workshop-ai/src/test/java/com/xtax/ai/agent/ToolExecutorTest.java
+
+# --- Service 测试 ---
+smart-workshop-ai/src/test/java/com/xtax/ai/service/AiSessionServiceImplTest.java
+
+# ==================== PARENT 模块（Maven 父工程，已修改） ====================
+
+smart-workshop-parent/pom.xml                        [M] 新增 smart-workshop-ai 子模块
+
+# ==================== SERVER 模块（已修改 + 新增文件） ====================
+
+# --- pom.xml ---
+smart-workshop-server/pom.xml                        [M] 添加 smart-workshop-ai 依赖，启用测试
+
+# --- application.yml ---
+smart-workshop-server/src/main/resources/application.yml [M] 导入 application-ai.yml
+
+# --- Config（权限桥接配置） ---
+smart-workshop-server/src/main/java/com/xtax/ai/config/AiPermissionBridge.java
+
+# --- AI Tool 实现（BOM 物料清单） ---
+smart-workshop-server/src/main/java/com/xtax/ai/tool/bom/CreateBomTool.java
+smart-workshop-server/src/main/java/com/xtax/ai/tool/bom/SearchBomTool.java
+
+# --- AI Tool 实现（Equipment 设备管理） ---
+smart-workshop-server/src/main/java/com/xtax/ai/tool/equipment/AddEquipmentFunctionTool.java
+smart-workshop-server/src/main/java/com/xtax/ai/tool/equipment/DeleteEquipmentFunctionTool.java
+smart-workshop-server/src/main/java/com/xtax/ai/tool/equipment/GetEquipmentDetailTool.java
+smart-workshop-server/src/main/java/com/xtax/ai/tool/equipment/SearchEquipmentTool.java
+smart-workshop-server/src/main/java/com/xtax/ai/tool/equipment/UpdateEquipmentFunctionTool.java
+
+# --- AI Tool 实现（Line 产线） ---
+smart-workshop-server/src/main/java/com/xtax/ai/tool/line/SearchLineTool.java
+
+# --- AI Tool 实现（Process 工艺路线） ---
+smart-workshop-server/src/main/java/com/xtax/ai/tool/process/SearchProcessTool.java
+
+# --- AI Tool 实现（Production 生产管理） ---
+smart-workshop-server/src/main/java/com/xtax/ai/tool/production/QueryOrderStatusTool.java
+smart-workshop-server/src/main/java/com/xtax/ai/tool/production/QueryPlanStatusTool.java
+smart-workshop-server/src/main/java/com/xtax/ai/tool/production/QueryWorkOrderStatusTool.java
+
+# --- AI Tool 实现（Team 班组） ---
+smart-workshop-server/src/main/java/com/xtax/ai/tool/team/SearchTeamTool.java
+
+# --- AI Tool 实现（WorkStep 工步） ---
+smart-workshop-server/src/main/java/com/xtax/ai/tool/workstep/AddWorkStepTool.java
+smart-workshop-server/src/main/java/com/xtax/ai/tool/workstep/SearchWorkStepTool.java
+
+# ==================== SERVER 模块 单元测试 ====================
+
+# --- BOM ---
+smart-workshop-server/src/test/java/com/xtax/ai/tool/bom/CreateBomToolTest.java
+
+# --- Line ---
+smart-workshop-server/src/test/java/com/xtax/ai/tool/line/SearchLineToolTest.java
+
+# --- Production ---
+smart-workshop-server/src/test/java/com/xtax/ai/tool/production/QueryPlanStatusToolTest.java
+smart-workshop-server/src/test/java/com/xtax/ai/tool/production/QueryWorkOrderStatusToolTest.java
+
+# --- Team ---
+smart-workshop-server/src/test/java/com/xtax/ai/tool/team/SearchTeamToolTest.java
+
+# --- WorkStep ---
+smart-workshop-server/src/test/java/com/xtax/ai/tool/workstep/AddWorkStepToolTest.java
+
+# ==================== 设计文档（docx/ 目录） ====================
+
+docx/详细设计/09-AI智能交互模块详细设计.md
+docx/详细设计/09-AI模块数据库DDL.sql
+
+# --- 关联文档（已更新） ---
+docx/概要设计说明书.md                              [M] 新增 AI 模块章节
+docx/需求规格说明书.md                              [M] 新增 AI 交互需求
