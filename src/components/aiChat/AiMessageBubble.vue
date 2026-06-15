@@ -11,6 +11,7 @@
  *   message: Object — 消息对象 { role, content, thinking, tokenUsage, interrupted, error }
  */
 import { computed } from 'vue'
+import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps({
   message: { type: Object, required: true }
@@ -38,6 +39,13 @@ const tokenText = computed(() => {
   if (t.outputTokens ?? t.completion_tokens) parts.push(`↓${t.outputTokens ?? t.completion_tokens}`)
   if (t.totalTokens ?? t.total_tokens) parts.push(`总 ${t.totalTokens ?? t.total_tokens}`)
   return parts.join(' ') + ' tokens'
+})
+
+// Markdown 渲染后的 HTML 内容
+const renderedContent = computed(() => {
+  const raw = props.message.content
+  if (!raw) return '&nbsp;'
+  return renderMarkdown(raw)
 })
 
 // 显示时间
@@ -83,7 +91,7 @@ const userInitial = computed(() => {
       <div
         v-else
         class="ai-bubble__content ai-bubble__content--md"
-        v-html="message.content || '&nbsp;'"
+        v-html="renderedContent"
       />
 
       <!-- 打字机光标（流式中） -->
@@ -247,5 +255,144 @@ const userInitial = computed(() => {
 
 .ai-bubble__time--user {
   text-align: right;
+}
+
+/* ========== Markdown 渲染内容样式 ========== */
+/* v-html 动态插入的 DOM 需要 :deep() 穿透 scoped */
+.ai-bubble__content--md :deep(p) {
+  margin: 0 0 8px;
+  line-height: 1.7;
+}
+.ai-bubble__content--md :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+/* 标题 */
+.ai-bubble__content--md :deep(h1),
+.ai-bubble__content--md :deep(h2),
+.ai-bubble__content--md :deep(h3),
+.ai-bubble__content--md :deep(h4),
+.ai-bubble__content--md :deep(h5),
+.ai-bubble__content--md :deep(h6) {
+  margin: 12px 0 6px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #1f2937;
+}
+.ai-bubble__content--md :deep(h1) { font-size: 18px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+.ai-bubble__content--md :deep(h2) { font-size: 16px; }
+.ai-bubble__content--md :deep(h3) { font-size: 15px; }
+.ai-bubble__content--md :deep(h4) { font-size: 14px; }
+
+/* 无序 / 有序列表 */
+.ai-bubble__content--md :deep(ul),
+.ai-bubble__content--md :deep(ol) {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+.ai-bubble__content--md :deep(li) {
+  margin-bottom: 2px;
+  line-height: 1.6;
+}
+
+/* 行内代码 */
+.ai-bubble__content--md :deep(code):not(pre code) {
+  background: #eef1f5;
+  color: #d63384;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+}
+
+/* 代码块（highlight.js 渲染后的 <pre><code>） */
+.ai-bubble__content--md :deep(pre) {
+  background: #f6f8fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 8px 0;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.ai-bubble__content--md :deep(pre code) {
+  background: transparent;
+  padding: 0;
+  color: #24292f;
+  font-size: inherit;
+  border-radius: 0;
+}
+
+/* 引用块 */
+.ai-bubble__content--md :deep(blockquote) {
+  margin: 8px 0;
+  padding: 6px 12px;
+  border-left: 3px solid #6366f1;
+  background: #f0f1ff;
+  color: #4b5563;
+}
+.ai-bubble__content--md :deep(blockquote p) {
+  margin: 4px 0;
+}
+
+/* 表格 */
+.ai-bubble__content--md :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.ai-bubble__content--md :deep(th),
+.ai-bubble__content--md :deep(td) {
+  border: 1px solid #e5e7eb;
+  padding: 6px 10px;
+  text-align: left;
+}
+.ai-bubble__content--md :deep(th) {
+  background: #f3f4f6;
+  font-weight: 600;
+  color: #374151;
+}
+.ai-bubble__content--md :deep(tr:nth-child(even)) {
+  background: #fafbfc;
+}
+
+/* 链接 */
+.ai-bubble__content--md :deep(a) {
+  color: #6366f1;
+  text-decoration: underline;
+}
+.ai-bubble__content--md :deep(a:hover) {
+  color: #4f46e5;
+}
+
+/* 分割线 */
+.ai-bubble__content--md :deep(hr) {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 12px 0;
+}
+
+/* 图片 */
+.ai-bubble__content--md :deep(img) {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 6px 0;
+}
+
+/* 加粗 / 斜体 */
+.ai-bubble__content--md :deep(strong) {
+  font-weight: 700;
+  color: #1f2937;
+}
+.ai-bubble__content--md :deep(em) {
+  font-style: italic;
+}
+
+/* 任务列表（GFM checkbox） */
+.ai-bubble__content--md :deep(input[type="checkbox"]) {
+  margin-right: 6px;
+  accent-color: #6366f1;
 }
 </style>

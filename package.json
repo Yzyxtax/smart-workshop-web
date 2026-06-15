@@ -17,6 +17,8 @@
     "@antv/x6-vue-shape": "^3.0.2",
     "axios": "^1.12.2",
     "element-plus": "^2.11.4",
+    "highlight.js": "^11.11.1",
+    "marked": "^18.0.5",
     "pinia": "^3.0.3",
     "vue": "^3.5.18",
     "vue-router": "^4.5.1"
