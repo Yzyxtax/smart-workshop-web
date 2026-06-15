@@ -264,12 +264,14 @@ export const useAiChatStore = defineStore('aiChat', () => {
         // 退出 thinking 状态
         assistantMessage.thinking = false
         // 插入工具调用项
+        // 后端契约：{ name: <toolName>, params: <object> }
         if (!assistantMessage.toolCalls) {
           assistantMessage.toolCalls = []
         }
         assistantMessage.toolCalls.push({
-          id: data.id ?? `tool_${Date.now()}`,
-          toolName: data.toolName ?? data.tool_name ?? '',
+          // 由于后端 tool_call 事件不带 id，使用工具名 + 时间戳兜底
+          id: data.id ?? `tool_${data.name ?? data.toolName ?? data.tool_name ?? 'unknown'}_${Date.now()}`,
+          toolName: data.name ?? data.toolName ?? data.tool_name ?? '',
           category: data.category ?? '',
           params: data.params ?? data.arguments ?? {},
           status: 'pending',
@@ -280,15 +282,39 @@ export const useAiChatStore = defineStore('aiChat', () => {
 
       case 'tool_result':
         // 更新对应的工具调用项
+        // 后端契约：{ tool: <toolName>, result: <ToolResult.toMap()> }
+        // ToolResult.toMap() 通常包含 success/data/message/error 等字段
         if (assistantMessage.toolCalls) {
-          const toolId = data.id ?? data.toolCallId ?? data.tool_call_id
-          const tool = assistantMessage.toolCalls.find(
-            t => t.id === toolId || t.toolName === (data.toolName ?? data.tool_name)
-          )
+          const resolvedToolName = data.tool ?? data.toolName ?? data.tool_name ?? data.name
+          // 倒序找最近一个 pending 的同名工具调用，避免同名工具多次调用错配
+          let tool = null
+          for (let i = assistantMessage.toolCalls.length - 1; i >= 0; i--) {
+            const t = assistantMessage.toolCalls[i]
+            if (t.toolName === resolvedToolName && t.status === 'pending') {
+              tool = t
+              break
+            }
+          }
+          // 兜底：找不到 pending 同名项时，更新最后一个同名项
+          if (!tool) {
+            for (let i = assistantMessage.toolCalls.length - 1; i >= 0; i--) {
+              if (assistantMessage.toolCalls[i].toolName === resolvedToolName) {
+                tool = assistantMessage.toolCalls[i]
+                break
+              }
+            }
+          }
           if (tool) {
-            tool.status = data.success === false ? 'failure' : 'success'
-            tool.result = data.result ?? data.output ?? null
-            tool.error = data.error ?? null
+            const resultPayload = data.result ?? data.output ?? null
+            // ToolResult.toMap() 中 success 字段决定状态
+            const success = resultPayload && typeof resultPayload === 'object'
+              ? resultPayload.success !== false
+              : data.success !== false
+            tool.status = success ? 'success' : 'failure'
+            tool.result = resultPayload
+            tool.error = (resultPayload && typeof resultPayload === 'object' && resultPayload.error)
+              ? resultPayload.error
+              : (data.error ?? null)
           }
         }
         break
